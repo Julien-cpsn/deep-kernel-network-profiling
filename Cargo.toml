@@ -1,0 +1,43 @@
+[workspace]
+resolver = "2"
+members = [
+    "aya-network-deep-profiling",
+    "aya-network-deep-profiling-common",
+    "aya-network-deep-profiling-ebpf",
+]
+default-members = ["aya-network-deep-profiling", "aya-network-deep-profiling-common"]
+
+[workspace.package]
+license = "MIT OR Apache-2.0"
+edition = "2024"
+
+[workspace.dependencies]
+aya = { version = "0.13.1", default-features = false }
+aya-build = { version = "0.1.2", default-features = false }
+aya-ebpf = { version = "0.1.1", default-features = false }
+aya-log = { version = "0.2.1", default-features = false }
+aya-log-ebpf = { version = "0.1.1", default-features = false }
+
+# CLI
+clap = { version = "4.5.20", default-features = false, features = ["std", "derive"] }
+clap-verbosity-flag = "3.0.3"
+
+# Serialization
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.141"
+
+# Utils
+anyhow = { version = "1", default-features = false }
+pretty_env_logger = { version = "0.5.0", default-features = false }
+libc = { version = "0.2.159", default-features = false }
+log = { version = "0.4.22", default-features = false }
+tokio = { version = "1.40.0", default-features = false }
+which = { version = "8.0.0", default-features = false, features = ["real-sys"] }
+
+# macros
+paste = "1.0.15"
+variant_count = "1.2.0"
+
+[profile.release.package.aya-network-deep-profiling-ebpf]
+debug = 2
+codegen-units = 1
