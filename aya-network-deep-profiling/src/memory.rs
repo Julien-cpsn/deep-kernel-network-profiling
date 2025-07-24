@@ -1,19 +1,32 @@
-use std::collections::HashMap;
-use aya::maps::{Queue, StackTraceMap, HashMap as EHashMap, MapData};
+use crate::ARGS;
+use aya::maps::{HashMap as EHashMap, MapData, Queue, StackTraceMap};
 use aya::util::kernel_symbols;
 use aya_network_deep_profiling::MemStat;
-use aya_network_deep_profiling_common::{AllocInfo, AllocType, Function, FUNCTIONS};
-use crate::ARGS;
+use aya_network_deep_profiling_common::{AllocDirection, AllocInfo, FUNCTIONS, STRING_AS_BYTES_MAX_LEN};
+use rayon::prelude::*;
+use std::collections::HashMap;
 
-pub fn handle_memory_usage(allocations: &mut Queue<MapData, AllocInfo>, registered_functions: &EHashMap<MapData, i64, Function>, stack_traces: &StackTraceMap<MapData>, initial_time: u64) -> anyhow::Result<Vec<AllocInfo>> {
+pub fn collect_queue(allocations: &mut Queue<MapData, AllocInfo>, initial_time: u64) -> Vec<AllocInfo> {
+    let mut all_allocations: Vec<AllocInfo> = Vec::new();
+
+    while let Ok(alloc_info) = allocations.pop(0) {
+        if alloc_info.timestamp < initial_time {
+            continue;
+        }
+
+        all_allocations.push(alloc_info);
+    }
+
+    all_allocations
+}
+
+pub fn handle_memory_usage(allocations: &mut Vec<AllocInfo>, registered_functions: &EHashMap<MapData, i64, [u8;STRING_AS_BYTES_MAX_LEN]>, stack_traces: &StackTraceMap<MapData>, initial_time: u64) -> anyhow::Result<()> {
     let ksyms = kernel_symbols()?;
 
-    let mut all_allocations: Vec<AllocInfo> = Vec::new();
     let mut memory_stats: HashMap<i64, MemStat> = HashMap::new();
 
-    while let Ok(mut alloc_info) = allocations.pop(0) {
+    for alloc_info in allocations {
         alloc_info.timestamp = alloc_info.timestamp.saturating_sub(initial_time);
-        all_allocations.push(alloc_info);
 
         match memory_stats.get_mut(&alloc_info.stack_id) {
             None => {
@@ -29,13 +42,13 @@ pub fn handle_memory_usage(allocations: &mut Queue<MapData, AllocInfo>, register
                 memory_stats.insert(alloc_info.stack_id, mem_stat);
             }
             Some(mem_stat) => {
-                match alloc_info.alloc_type {
-                    AllocType::Malloc => {
+                match alloc_info.alloc_direction {
+                    AllocDirection::Malloc => {
                         mem_stat.alloc_count += 1;
                         mem_stat.total_allocated += alloc_info.size;
                         mem_stat.current_usage += alloc_info.size as i64;
                     },
-                    AllocType::Free => {
+                    AllocDirection::Free => {
                         mem_stat.free_count += 1;
                         mem_stat.total_freed += alloc_info.size;
                         mem_stat.current_usage -= alloc_info.size as i64;
@@ -49,21 +62,22 @@ pub fn handle_memory_usage(allocations: &mut Queue<MapData, AllocInfo>, register
         }
     }
 
-    println!("================================== Memory Usage Statistics ==================================");
+    println!("==================================== Memory Usage Statistics ====================================");
     println!(
-        "{: <15} {:<10} {:<12} {:<12} {:<12} {:<12} {:<8} {:<8}",
-        "Name", "StackID", "Total_Alloc", "Total_Freed", "Current", "Peak", "Allocs", "Frees");
-    println!("---------------------------------------------------------------------------------------------");
+        "{: <16} {:>10} {:>12} {:>12} {:>12} {:>12} {:>8} {:>8}",
+        "Name", "StackID", "Total_Alloc", "Total_Freed", "Current", "Peak", "Allocs", "Frees"
+    );
+    println!("-------------------------------------------------------------------------------------------------");
 
     for (stack_id, mem_stat) in memory_stats.iter() {
         let function_name = match registered_functions.get(stack_id, 0) {
-            Ok(function_name) => function_name.as_str(),
-            Err(_) => "Unknown"
+            Ok(function_name_bytes) => String::from_utf8_lossy(&function_name_bytes).trim_matches(char::from(0)).to_string(),
+            Err(_) => String::from("Unknown")
         };
 
         println!(
             "{: <15} {:>10} {:>12} {:>12} {:>12} {:>12} {:>8} {:>8}",
-            function_name,
+            function_name.trim(),
             stack_id,
             mem_stat.total_allocated,
             mem_stat.total_freed,
@@ -85,16 +99,21 @@ pub fn handle_memory_usage(allocations: &mut Queue<MapData, AllocInfo>, register
                         }
                     }
 
-                    let target = symbols
-                        .iter()
+                    let targets = symbols
+                        .par_iter()
                         .filter_map(|symbol| symbol.1)
-                        .find_map(|symbol_name| FUNCTIONS.iter().find_map(|name| match *name == symbol_name {
+                        .filter_map(|symbol_name| FUNCTIONS.iter().find_map(|name| match &name.replace("_p_", ".") == symbol_name {
                             true => Some(symbol_name.as_str()),
                             false => None
                         }))
-                        .unwrap_or("Unknown");
+                        .collect::<Vec<&str>>();
 
-                    println!("  Target: {target}");
+                    if targets.is_empty() {
+                        println!("  Targets: Unknown");
+                    }
+                    else {
+                        println!("  Targets: {}", targets.join(", "));
+                    }
                     println!("  Stack trace:");
                     for symbol in symbols {
                         match symbol.1 {
@@ -111,5 +130,5 @@ pub fn handle_memory_usage(allocations: &mut Queue<MapData, AllocInfo>, register
         }
     }
 
-    Ok(all_allocations)
+    Ok(())
 }

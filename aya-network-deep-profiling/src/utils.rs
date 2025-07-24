@@ -1,8 +1,9 @@
 use once_cell::sync::Lazy;
 use std::fs;
+use rayon::prelude::*;
 
 pub fn mean(list: &[u64]) -> u64 {
-    let sum: u64 = Iterator::sum(list.iter());
+    let sum: u64 = ParallelIterator::sum(list.par_iter());
     sum.div_euclid(list.len() as u64)
 }
 

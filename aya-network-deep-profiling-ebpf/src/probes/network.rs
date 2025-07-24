@@ -1,10 +1,18 @@
 use crate::profile_function;
 
 profile_function!(
+    ip_list_rcv,
+    ip_sublist_rcv,
+    ip_rcv,
+    //ip_input,
+    ip_route_input_rcu_p_part_p_0,
+    ip_route_input_noref,
+    ip_route_input_slow,
+    __fib_lookup,
+    fib_table_lookup,
     ip_forward,
     ip_forward_options,
     ip_send_check,
-    //nf_hook,
     __icmp_send,
     icmp_push_reply,
     ip_append_data,

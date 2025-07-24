@@ -33,6 +33,7 @@ libc = { version = "0.2.159", default-features = false }
 log = { version = "0.4.22", default-features = false }
 tokio = { version = "1.40.0", default-features = false }
 which = { version = "8.0.0", default-features = false, features = ["real-sys"] }
+network-types = "0.0.8"
 
 # macros
 paste = "1.0.15"

@@ -6,6 +6,8 @@ edition.workspace = true
 [dependencies]
 aya-network-deep-profiling-common = { path = "../aya-network-deep-profiling-common" }
 
+network-types = { workspace = true }
+
 aya-ebpf = { workspace = true }
 aya-log-ebpf = { workspace = true }
 paste = { workspace = true }

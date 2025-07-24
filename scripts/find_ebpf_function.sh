@@ -1,1 +1,1 @@
-cat /sys/kernel/debug/tracing/available_filter_functions | grep $1
+cat /sys/kernel/debug/tracing/available_filter_functions | grep $1 | sort

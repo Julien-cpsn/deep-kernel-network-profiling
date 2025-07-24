@@ -2,141 +2,160 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import pandas as pd
 import numpy as np
+import math
 import json
 
 f = open('shared/execution_times.json', 'r')
 data = json.load(f)
 
 # Convert to DataFrame for easier handling
-time_df = pd.json_normalize(data, meta=["function_name", "start_time", "end_time", "duration"])
-
-# Function to assign depth based on time range overlaps
-def assign_depth(df):
-    df = df.sort_values('start_time').reset_index(drop=True)
-    depth = [0.0] * len(df)  # Initialize depth column
-
-    # Step 1: Assign depths based on containment
-    for i in range(len(df)):
-        current_start = df.iloc[i]['start_time']
-        current_end = df.iloc[i]['end_time']
-        max_depth = 0.0
-
-        # Check for functions that contain the current function
-        for j in range(len(df)):
-            if i != j:
-                other_start = df.iloc[j]['start_time']
-                other_end = df.iloc[j]['end_time']
-                # If current function is fully contained within another function
-                if other_start <= current_start and current_end <= other_end:
-                    max_depth = max(max_depth, depth[j] + 0.1)
-
-        depth[i] = max_depth
-
-    df['depth'] = depth
-
-    # Step 2: Identify depth=0 functions that contain no other functions
-
-    rows_to_keep = []
-    for i in range(len(df)):
-        if df.iloc[i]['depth'] > 0:
-            # Keep all non-depth=0 functions
-            rows_to_keep.append(i)
-        else:
-            # For depth=0 functions, check if they contain any other function
-            current_start = df.iloc[i]['start_time']
-            current_end = df.iloc[i]['end_time']
-            contains_others = False
-            for j in range(len(df)):
-                if i != j:
-                    other_start = df.iloc[j]['start_time']
-                    other_end = df.iloc[j]['end_time']
-                    # Check if this depth=0 function contains another function
-                    if current_start <= other_start and other_end <= current_end:
-                        contains_others = True
-                        break
-            if contains_others:
-                rows_to_keep.append(i)
-
-    # Step 3: Filter DataFrame to keep only valid rows
-    df = df.iloc[rows_to_keep].reset_index(drop=True)
-
-
-    return df
-
-# Assign depth
-time_df = assign_depth(time_df)
+time_df = pd.json_normalize(data, meta=["function_name", "start_time", "end_time", "duration", "inner_duration", "depth", "cpuid"])
+time_df['depth'] = time_df['depth'].apply(lambda x: x/10)
+time_df['inner_duration_perc'] = time_df['inner_duration'] * 100 / time_df['duration']
 
 f = open('shared/allocations.json', 'r')
 data = json.load(f)
 
 def assign_allocations(df):
-    memory_usage = 0
-    cumulative_memory = []
-    timestamps = []
+    memory_usage = {'kmalloc': 0, 'kmem_cache': 0, 'total': 0}
+    cumulative_memory = {'kmalloc': [0], 'kmem_cache': [0], 'total': [0]}
+    timestamps = {'kmalloc': [0], 'kmem_cache': [0], 'total': [0]}
+
+    # Sort by timestamp to ensure chronological order
+    df = df.sort_values('timestamp').reset_index(drop=True)
 
     for _, row in df.iterrows():
-        if row['alloc_type'] == 'Malloc':
-            memory_usage += row['size']
-        elif row['alloc_type'] == 'Free':
-            memory_usage -= row['size']
-        cumulative_memory.append(memory_usage)
-        timestamps.append(row['timestamp'])
+        alloc_type = row['alloc_type']
+        alloc_direction = row['alloc_direction']
+        size = row['size']
 
-    return cumulative_memory,timestamps
+        # Update memory usage for the specific memory_type and total
+        if alloc_direction == 'Malloc':
+            memory_usage[alloc_type] += size
+            memory_usage['total'] += size
+        elif alloc_direction == 'Free':
+            memory_usage[alloc_type] -= size
+            memory_usage['total'] -= size
+
+        # Append to respective lists
+        # For kmem and kmem_cache, append only if the row matches the memory_type
+        if alloc_type == 'kmalloc':
+            cumulative_memory['kmalloc'].append(memory_usage['kmalloc'])
+            timestamps['kmalloc'].append(row['timestamp'])
+        elif alloc_type == 'kmem_cache':
+            cumulative_memory['kmem_cache'].append(memory_usage['kmem_cache'])
+            timestamps['kmem_cache'].append(row['timestamp'])
+
+        # Always append to total
+        cumulative_memory['total'].append(memory_usage['total'])
+        timestamps['total'].append(row['timestamp'])
+
+    return cumulative_memory, timestamps
 
 # Convert to DataFrame for easier handling
-allocations_df = pd.json_normalize(data, meta=["size", "alloc_type", "timestamp"])
+allocations_df = pd.json_normalize(data, meta=["alloc_type", "alloc_direction", "size", "timestamp"])
 cumulative_memory,timestamps = assign_allocations(allocations_df)
 
-# Create figure and axis
-fig, ax = plt.subplots(figsize=(10, 5))
+f = open('shared/xdp_times.json', 'r')
+xdp_times = json.load(f)
 
-ax2 = ax.twinx()
-ax2.step(timestamps, cumulative_memory, marker='o', linestyle='--', color='b', alpha=0.5, label="Memory")
+# Create figure and axis
+fig = plt.figure()
+ax1 = fig.add_subplot(2, 1, 1)
+ax2 = fig.add_subplot(2, 1, 2, sharex=ax1)
 
 # Assign colors to functions (optional: use a colormap or hash function names)
-norm = plt.Normalize(time_df['depth'].min(), time_df['depth'].max())
+norm = plt.Normalize(0, 100)
 cmap = cm.autumn.reversed()
-#cmap = cm.winter
+#cmap = cm.rainbow
 
 # Plot each function call as a horizontal bar
-for i, row in time_df.iterrows():
-    color = cmap(norm(row['depth']))
-    ax.barh(
+for i, row in time_df.sort_values(by=['function_name']).iterrows():
+    color = cmap(norm(row['inner_duration_perc']))
+    ax1.barh(
         row["depth"],
         row["duration"],
         left=row["start_time"],
         height=0.1,
         color=color,
-        edgecolor="black",
+        edgecolor=(0.0, 0.0, 0.0, 0.5),
         label=row["function_name"]
     )
 
 # Customize the plot
-ax.set_xlabel("Time (ns)")
-ax.set_ylabel("Call Stack Depth")
-ax.set_yticklabels([])
-ax.set_title("Flamegraph")
+ax1.set_title("Flamegraph")
+ax1.set_xlim(left=0)
+#ax1.set_ylim(bottom=0)
+ax1.set_ylabel("Call Stack Depth")
+ax1.set_yticklabels([])
+
 ax2.yaxis.tick_right()
-ax2.yaxis.set_label_position("right")
+ax2.set_xlabel("Time (ns)")
 ax2.set_ylabel("Memory usage (Bytes)")
+
+texts = []
 
 # Optional: Add function names as text labels on bars
 for i, row in time_df.iterrows():
-    ax.text(
-        row["start_time"] + row["duration"] / 2,
-        row["depth"],
-        row["function_name"],
-        ha="center",
-        va="center",
-        color="black"
-    )
+    if row["duration"] < 50000:
+        text = ax1.text(
+            row["start_time"] + row["duration"] / 2,
+            row["depth"],
+            row["function_name"],
+            ha="center",
+            va="center",
+            color="black",
+            rotation="vertical",
+            size="small",
+            visible=False
+        )
+    else:
+        text = ax1.text(
+            row["start_time"] + row["duration"] / 2,
+            row["depth"],
+            row["function_name"],
+            ha="center",
+            va="center",
+            color="black",
+            size="small",
+            visible=False
+        )
+
+    texts.append((text, row['duration'], row['start_time'], row['end_time']))
+
+# Function to update text visibility based on zoom
+def update_text_visibility(event_ax):
+    # Get current x-axis limits
+    x_min, x_max = event_ax.get_xlim()
+    visible_range = x_max - x_min
+
+    threshold = visible_range * 0.0075
+
+    for text, duration, start_time, end_time in texts:
+        # Check if bar is visible in the current view and duration is significant
+        is_visible = (start_time <= x_max and end_time >= x_min) and (duration >= threshold)
+        text.set_visible(is_visible)
+
+
+for xdp_time in xdp_times:
+    ax1.axvline(x=xdp_time[0], linestyle="--", linewidth=0.5, color='black', alpha=0.5)
+
+ax1.callbacks.connect('xlim_changed', update_text_visibility)
+update_text_visibility(ax1)
 
 # Remove duplicate labels in legend
-handles, labels = ax.get_legend_handles_labels()
-handle, label = ax2.get_legend_handles_labels()
-by_label = dict(zip(labels + label, handles + handle))
-ax.legend(by_label.values(), by_label.keys(), loc="upper left")
+handles, labels = ax1.get_legend_handles_labels()
+by_label = dict(zip(labels, handles))
+ax1.legend(by_label.values(), by_label.keys(), loc="upper right", bbox_to_anchor=(1.145, 1.025), framealpha=1.0, edgecolor="white")
 
-plt.tight_layout()
+ax2.step(timestamps['kmalloc'], cumulative_memory['kmalloc'], where='post', marker='o', linestyle='--', color='red', alpha=0.8, label='kmalloc')
+ax2.step(timestamps['kmem_cache'], cumulative_memory['kmem_cache'], where='post', marker='o', linestyle='--', color='blue', alpha=0.8, label='kmem_cache')
+ax2.step(timestamps['total'], cumulative_memory['total'], where='post', marker='o', linestyle='-', color='black', alpha=1, label='Total Memory')
+ax2.grid(True, linestyle='--', alpha=0.7)
+
+handles, labels = ax2.get_legend_handles_labels()
+by_label = dict(zip(labels, handles))
+ax2.legend(by_label.values(), by_label.keys(), loc="upper right")
+
+#plt.tight_layout()
 plt.show()

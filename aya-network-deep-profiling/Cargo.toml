@@ -25,6 +25,9 @@ serde_json = { workspace = true }
 
 # Utils
 once_cell = "1.21.3"
+rayon = "1.10.0"
+network-types = { workspace = true }
+getifaddrs = "0.2.0"
 
 [build-dependencies]
 anyhow = { workspace = true }
