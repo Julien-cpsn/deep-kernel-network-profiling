@@ -1,4 +1,3 @@
-use aya_network_deep_profiling_common::STRING_AS_BYTES_MAX_LEN;
 use crate::{ACTIVE_FUNCTIONS, DEPTH_COUNTER, REGISTERED_FUNCTIONS};
 
 pub fn set_function_active(cpuid: &u32, state: bool) -> Result<(), u32> {
@@ -11,16 +10,14 @@ pub fn set_function_active(cpuid: &u32, state: bool) -> Result<(), u32> {
 }
 
 pub fn increment_depth(cpuid: &u32) -> Result<u32, u32> {
-    let depth = match DEPTH_COUNTER.get_ptr_mut(cpuid) {
-        Some(ptr) => unsafe { *ptr },
-        None => 0,
-    };
-
-    let new_depth = depth + 1;
-    unsafe {
-        match DEPTH_COUNTER.get_ptr_mut(cpuid) {
-            Some(ptr) => *ptr = new_depth,
-            None => DEPTH_COUNTER.insert(cpuid, &new_depth, 0).map_err(|_| 0u32)?,
+    let new_depth = match DEPTH_COUNTER.get_ptr_mut(cpuid) {
+        Some(ptr) => unsafe {
+            *ptr += 1;
+            *ptr
+        },
+        None => {
+            DEPTH_COUNTER.insert(cpuid, &1, 0).map_err(|_| 0u32)?;
+            1
         }
     };
 
@@ -28,17 +25,14 @@ pub fn increment_depth(cpuid: &u32) -> Result<u32, u32> {
 }
 
 pub fn decrement_depth(cpuid: &u32) -> Result<u32, u32> {
-    let depth = match DEPTH_COUNTER.get_ptr_mut(cpuid) {
-        Some(ptr) => unsafe { *ptr },
-        None => 0,
-    };
-
-    // Decrement depth (ensure it doesn't go negative)
-    let new_depth = depth.saturating_sub(1);
-    unsafe {
-        match DEPTH_COUNTER.get_ptr_mut(cpuid) {
-            Some(ptr) => *ptr = new_depth,
-            None => DEPTH_COUNTER.insert(cpuid, &new_depth, 0).map_err(|_| 0u32)?,
+    let new_depth = match DEPTH_COUNTER.get_ptr_mut(cpuid) {
+        Some(ptr) => unsafe {
+            *ptr = (*ptr).saturating_sub(1);
+            *ptr
+        },
+        None => {
+            DEPTH_COUNTER.insert(cpuid, &0, 0).map_err(|_| 0u32)?;
+            0
         }
     };
 
@@ -52,12 +46,9 @@ pub fn should_profile_stack_id(cpuid: u32) -> bool {
     }
 }
 
-pub fn register_function(stack_id: &i64, function_name: &str) -> Result<(), u32> {
-    let mut array_tmp = [0u8;STRING_AS_BYTES_MAX_LEN];
-    array_tmp[..function_name.len()].copy_from_slice(function_name.as_bytes());
-
+pub fn register_function(stack_id: &i64, function_id: u16) -> Result<(), u32> {
     if REGISTERED_FUNCTIONS.get_ptr(stack_id).is_none() {
-        REGISTERED_FUNCTIONS.insert(stack_id, &array_tmp, 0).map_err(|_| 0u32)?;
+        REGISTERED_FUNCTIONS.insert(stack_id, &function_id, 0).map_err(|_| 0u32)?;
     }
 
     Ok(())

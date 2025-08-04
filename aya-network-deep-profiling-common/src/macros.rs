@@ -29,6 +29,19 @@ macro_rules! enum_display {
                         )*
                     }
                 }
+
+                pub fn as_id(&self) -> u16 {
+                    *self as u16
+                }
+
+                pub fn from_id(id: u16) -> $name {
+                    return match id {
+                        $(
+                            id if id == $name::$variant as u16 => $name::$variant,
+                        )*
+                        _ => unreachable!()
+                    }
+                }
             }
 
             impl fmt::Display for $name {
@@ -42,7 +55,7 @@ macro_rules! enum_display {
                     write!(f, "{name}")
                 }
             }
-            
+
             impl Program for $name {
                 fn to_str(self) -> &'static str {
                     self.as_str()

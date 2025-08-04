@@ -4,8 +4,8 @@ macro_rules! profile_function {
         paste::paste! {
             $(
                 #[aya_ebpf::macros::kprobe]
-                pub fn [<probe_enter_ $function>](ctx: aya_ebpf::programs::ProbeContext) -> u32 {
-                    match [<probe_try_enter_ $function>](ctx) {
+                pub fn [<probe_enter_ $function>](_ctx: aya_ebpf::programs::ProbeContext) -> u32 {
+                    match [<probe_try_enter_ $function>]() {
                         Ok(ret) => ret,
                         Err(ret) => {
                             unsafe {
@@ -16,24 +16,30 @@ macro_rules! profile_function {
                     }
                 }
 
-                fn [<probe_try_enter_ $function>](ctx: aya_ebpf::programs::ProbeContext) -> Result<u32, u32> {
-                    let fctx = crate::utils::context::get_full_ctx(ctx)?;
+                fn [<probe_try_enter_ $function>]() -> Result<u32, u32> {
+                    let cpuid = unsafe { aya_ebpf::helpers::bpf_get_smp_processor_id() } as u32;
+                    /*
+                    let stack_id = match unsafe { crate::STACK_TRACES.get_stackid(&ctx, 0) } {
+                        Ok(stack_id) => stack_id,
+                        _ => return Err(0),
+                    };*/
+
                     let function = aya_network_deep_profiling_common::Function::$function;
                     let direction = aya_network_deep_profiling_common::FunctionDirection::Entry;
 
                     //crate::utils::log::log_ctx(crate::utils::log::LogType::Debug, &fctx.ctx, function.as_str(), Some(direction));
-                    let depth = crate::utils::function::increment_depth(&fctx.cpuid)?;
-                    crate::utils::time::log_function_time(function, direction, depth, fctx.cpuid)?;
-                    crate::utils::function::set_function_active(&fctx.cpuid, true)?;
-                    crate::utils::function::register_function(&fctx.stack_id, function.as_str())?;
+                    let depth = crate::utils::function::increment_depth(&cpuid)?;
+                    crate::utils::time::log_function_time(function, direction, depth, cpuid)?;
+                    crate::utils::function::set_function_active(&cpuid, true)?;
+                    //crate::utils::function::register_function(&stack_id, function.as_id())?;
 
                     Ok(0)
                 }
 
 
                 #[aya_ebpf::macros::kretprobe]
-                pub fn [<probe_ret_ $function>](ctx: aya_ebpf::programs::RetProbeContext) -> u32 {
-                    match [<probe_try_ret_ $function>](ctx) {
+                pub fn [<probe_ret_ $function>](_ctx: aya_ebpf::programs::RetProbeContext) -> u32 {
+                    match [<probe_try_ret_ $function>]() {
                         Ok(ret) => ret,
                         Err(ret) => {
                             unsafe {
@@ -44,15 +50,16 @@ macro_rules! profile_function {
                     }
                 }
 
-                fn [<probe_try_ret_ $function>](ctx: aya_ebpf::programs::RetProbeContext) -> Result<u32, u32> {
-                    let fctx = crate::utils::context::get_full_ctx(ctx)?;
+                fn [<probe_try_ret_ $function>]() -> Result<u32, u32> {
+                    let cpuid = unsafe { aya_ebpf::helpers::bpf_get_smp_processor_id() } as u32;
+
                     let function = aya_network_deep_profiling_common::Function::$function;
                     let direction = aya_network_deep_profiling_common::FunctionDirection::Exit;
 
                     //crate::utils::log::log_ctx(crate::utils::log::LogType::Debug, &fctx.ctx, function.as_str(), Some(direction));
-                    let depth = crate::utils::function::decrement_depth(&fctx.cpuid)?;
-                    crate::utils::time::log_function_time(function, direction, depth, fctx.cpuid)?;
-                    crate::utils::function::set_function_active(&fctx.cpuid, false)?;
+                    let depth = crate::utils::function::decrement_depth(&cpuid)?;
+                    crate::utils::time::log_function_time(function, direction, depth, cpuid)?;
+                    crate::utils::function::set_function_active(&cpuid, false)?;
 
                     Ok(0)
                 }
@@ -93,7 +100,7 @@ macro_rules! alloc {
                     let time = unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() };
                     let alloc_info = aya_network_deep_profiling_common::AllocInfo {
                         alloc_type: aya_network_deep_profiling_common::AllocType::$alloc_type,
-                        alloc_direction: aya_network_deep_profiling_common::AllocDirection::Malloc,
+                        alloc_direction: aya_network_deep_profiling_common::AllocDirection::Alloc,
                         size,
                         timestamp: time,
                         stack_id: fctx.stack_id,
@@ -200,7 +207,7 @@ macro_rules! log_time {
                         Ok(stack_id) => stack_id,
                         _ => return Err(0),
                     };
-                    crate::utils::function::register_function(&stack_id, function.as_str())?;
+                    crate::utils::function::register_function(&stack_id, function.as_id())?;
 
                     Ok(0)
                 }

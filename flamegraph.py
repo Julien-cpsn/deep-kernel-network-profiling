@@ -30,7 +30,7 @@ def assign_allocations(df):
         size = row['size']
 
         # Update memory usage for the specific memory_type and total
-        if alloc_direction == 'Malloc':
+        if alloc_direction == 'Alloc':
             memory_usage[alloc_type] += size
             memory_usage['total'] += size
         elif alloc_direction == 'Free':
@@ -83,7 +83,7 @@ for i, row in time_df.sort_values(by=['function_name']).iterrows():
     )
 
 # Customize the plot
-ax1.set_title("Flamegraph")
+#ax1.set_title("Flamegraph")
 ax1.set_xlim(left=0)
 #ax1.set_ylim(bottom=0)
 ax1.set_ylabel("Call Stack Depth")
@@ -97,7 +97,7 @@ texts = []
 
 # Optional: Add function names as text labels on bars
 for i, row in time_df.iterrows():
-    if row["duration"] < 50000:
+    if row["duration"] < 10000:
         text = ax1.text(
             row["start_time"] + row["duration"] / 2,
             row["depth"],
@@ -123,30 +123,45 @@ for i, row in time_df.iterrows():
 
     texts.append((text, row['duration'], row['start_time'], row['end_time']))
 
+
+for xdp_time in xdp_times:
+    ax1.axvline(x=xdp_time[0], linestyle="--", linewidth=0.5, color='black', alpha=0.5)
+    text = ax1.text(
+        xdp_time[0] - 10000,
+        0.1,
+        xdp_time[1].replace(", ", "\n"),
+        ha="center",
+        color="black",
+        alpha=0.5,
+        rotation="vertical",
+        size="x-small",
+        visible=False
+    )
+
+    texts.append((text, 1000000, xdp_time[0] - 500000, xdp_time[0] + 500000))
+
 # Function to update text visibility based on zoom
 def update_text_visibility(event_ax):
     # Get current x-axis limits
     x_min, x_max = event_ax.get_xlim()
     visible_range = x_max - x_min
 
-    threshold = visible_range * 0.0075
+    threshold = visible_range * 0.025
 
     for text, duration, start_time, end_time in texts:
         # Check if bar is visible in the current view and duration is significant
         is_visible = (start_time <= x_max and end_time >= x_min) and (duration >= threshold)
         text.set_visible(is_visible)
 
-
-for xdp_time in xdp_times:
-    ax1.axvline(x=xdp_time[0], linestyle="--", linewidth=0.5, color='black', alpha=0.5)
-
 ax1.callbacks.connect('xlim_changed', update_text_visibility)
 update_text_visibility(ax1)
 
 # Remove duplicate labels in legend
+"""
 handles, labels = ax1.get_legend_handles_labels()
 by_label = dict(zip(labels, handles))
 ax1.legend(by_label.values(), by_label.keys(), loc="upper right", bbox_to_anchor=(1.145, 1.025), framealpha=1.0, edgecolor="white")
+"""
 
 ax2.step(timestamps['kmalloc'], cumulative_memory['kmalloc'], where='post', marker='o', linestyle='--', color='red', alpha=0.8, label='kmalloc')
 ax2.step(timestamps['kmem_cache'], cumulative_memory['kmem_cache'], where='post', marker='o', linestyle='--', color='blue', alpha=0.8, label='kmem_cache')
@@ -157,5 +172,5 @@ handles, labels = ax2.get_legend_handles_labels()
 by_label = dict(zip(labels, handles))
 ax2.legend(by_label.values(), by_label.keys(), loc="upper right")
 
-#plt.tight_layout()
+plt.tight_layout()
 plt.show()

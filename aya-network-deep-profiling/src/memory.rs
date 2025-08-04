@@ -2,7 +2,7 @@ use crate::ARGS;
 use aya::maps::{HashMap as EHashMap, MapData, Queue, StackTraceMap};
 use aya::util::kernel_symbols;
 use aya_network_deep_profiling::MemStat;
-use aya_network_deep_profiling_common::{AllocDirection, AllocInfo, FUNCTIONS, STRING_AS_BYTES_MAX_LEN};
+use aya_network_deep_profiling_common::{Alloc, AllocDirection, AllocInfo, FUNCTIONS};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
@@ -20,7 +20,7 @@ pub fn collect_queue(allocations: &mut Queue<MapData, AllocInfo>, initial_time: 
     all_allocations
 }
 
-pub fn handle_memory_usage(allocations: &mut Vec<AllocInfo>, registered_functions: &EHashMap<MapData, i64, [u8;STRING_AS_BYTES_MAX_LEN]>, stack_traces: &StackTraceMap<MapData>, initial_time: u64) -> anyhow::Result<()> {
+pub fn handle_memory_usage(allocations: &mut Vec<AllocInfo>, registered_functions: &EHashMap<MapData, i64, u16>, stack_traces: &StackTraceMap<MapData>, initial_time: u64) -> anyhow::Result<()> {
     let ksyms = kernel_symbols()?;
 
     let mut memory_stats: HashMap<i64, MemStat> = HashMap::new();
@@ -43,7 +43,7 @@ pub fn handle_memory_usage(allocations: &mut Vec<AllocInfo>, registered_function
             }
             Some(mem_stat) => {
                 match alloc_info.alloc_direction {
-                    AllocDirection::Malloc => {
+                    AllocDirection::Alloc => {
                         mem_stat.alloc_count += 1;
                         mem_stat.total_allocated += alloc_info.size;
                         mem_stat.current_usage += alloc_info.size as i64;
@@ -62,6 +62,10 @@ pub fn handle_memory_usage(allocations: &mut Vec<AllocInfo>, registered_function
         }
     }
 
+    for (stack_id, id) in registered_functions.iter().filter_map(|t| t.ok()) {
+        println!("{stack_id:X} {}", Alloc::from_id(id).as_str());
+    }
+
     println!("==================================== Memory Usage Statistics ====================================");
     println!(
         "{: <16} {:>10} {:>12} {:>12} {:>12} {:>12} {:>8} {:>8}",
@@ -71,12 +75,12 @@ pub fn handle_memory_usage(allocations: &mut Vec<AllocInfo>, registered_function
 
     for (stack_id, mem_stat) in memory_stats.iter() {
         let function_name = match registered_functions.get(stack_id, 0) {
-            Ok(function_name_bytes) => String::from_utf8_lossy(&function_name_bytes).trim_matches(char::from(0)).to_string(),
+            Ok(function_id) => Alloc::from_id(function_id).to_string(),
             Err(_) => String::from("Unknown")
         };
 
         println!(
-            "{: <15} {:>10} {:>12} {:>12} {:>12} {:>12} {:>8} {:>8}",
+            "{: <15} {:>10X} {:>12} {:>12} {:>12} {:>12} {:>8} {:>8}",
             function_name.trim(),
             stack_id,
             mem_stat.total_allocated,

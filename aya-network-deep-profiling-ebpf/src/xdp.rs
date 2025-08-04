@@ -4,7 +4,7 @@ use aya_ebpf::helpers::bpf_ktime_get_ns;
 use aya_ebpf::macros::xdp;
 use aya_ebpf::programs::XdpContext;
 use aya_log_ebpf::info;
-use network_types::eth::EthHdr;
+use aya_network_deep_profiling_common::{EthHeader};
 
 #[xdp]
 pub fn xdp_packet_log(ctx: XdpContext) -> u32 {
@@ -32,13 +32,23 @@ unsafe fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Result<*const T, ()> {
 }
 
 fn try_xdp_packet_log(ctx: XdpContext) -> Result<u32, ()> {
-    let ethhdr: *const EthHdr = unsafe { ptr_at(&ctx, 0)? };
+    let eth_hdr: *const EthHeader = unsafe { ptr_at(&ctx, 0)? };
     let time = unsafe { bpf_ktime_get_ns() };
-    let dst_addr = unsafe { (*ethhdr).dst_addr };
 
-    info!(&ctx, "New packet {:X}{:X}{:X}{:X}{:X}{:X}", dst_addr[0], dst_addr[1], dst_addr[2], dst_addr[3], dst_addr[4], dst_addr[5]);
+    unsafe {
+        info!(
+            &ctx,
+            "New packet for {:X}:{:X}:{:X}:{:X}:{:X}:{:X}",
+            (*eth_hdr).dst_addr[0],
+            (*eth_hdr).dst_addr[1],
+            (*eth_hdr).dst_addr[2],
+            (*eth_hdr).dst_addr[3],
+            (*eth_hdr).dst_addr[4],
+            (*eth_hdr).dst_addr[5]
+        );
+    }
 
-    XDP_TIMES.insert(&time, &dst_addr, 0).map_err(|_| ())?;
+    XDP_TIMES.insert(&time, unsafe { &*eth_hdr }, 0).map_err(|_| ())?;
 
     Ok(XDP_PASS)
 }

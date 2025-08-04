@@ -8,7 +8,7 @@ use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
 use aya::maps;
-use aya::maps::{Queue, StackTraceMap, HashMap as EHashMap, PerCpuHashMap, MapError};
+use aya::maps::{Queue, StackTraceMap, HashMap as EHashMap, PerCpuHashMap};
 use aya::programs::{KProbe, TracePoint, Xdp, XdpFlags};
 use aya::programs::xdp::XdpLinkId;
 use clap::Parser;
@@ -18,7 +18,7 @@ use log::{debug, warn, info};
 use once_cell::sync::Lazy;
 use pretty_env_logger::env_logger;
 use tokio::signal;
-use aya_network_deep_profiling_common::{AllocInfo, Function, FunctionCall, Alloc, FUNCTIONS, ALLOCS, TRACEPOINTS, STRING_AS_BYTES_MAX_LEN};
+use aya_network_deep_profiling_common::{AllocInfo, Function, FunctionCall, Alloc, FUNCTIONS, ALLOCS, TRACEPOINTS, EthHeader, EtherHeaderType};
 use crate::args::Args;
 use crate::memory::{collect_queue, handle_memory_usage};
 use crate::time::{filter_times, handle_execution_times};
@@ -140,6 +140,34 @@ async fn main() -> anyhow::Result<()> {
         interfaces_links.insert(interface.name.clone(), link_id);
     }
 
+    /* --------- Perf event ----------- */
+
+    /*
+    let mut perf_events_links: HashMap<String, PerfEventLinkId> = HashMap::new();
+    let program: &mut PerfEvent = ebpf.program_mut("perf_l1d_misses").unwrap().try_into()?;
+    program.load()?;
+
+    // Config for L1D cache misses: type=L1D, op=READ, result=MISS
+    let config = (PERF_COUNT_HW_CACHE_L1D as u64) |
+        ((PERF_COUNT_HW_CACHE_OP_READ as u64) << 8) |
+        ((PERF_COUNT_HW_CACHE_RESULT_MISS as u64) << 16);
+
+
+    perf_events_links.insert(String::from("perf_l1d_misses"), link_id);
+    for cpu in online_cpus().map_err(|(message, error)| { println!("{message}"); error })? {
+        info!("Attaching program perf_l1d_misses to CPU {cpu}");
+
+        let link_id = program.attach(
+            PerfTypeId::HwCache,
+            config,
+            // Monitor all processes
+            PerfEventScope::AllProcessesOneCpu { cpu },
+            // Sample period
+            SamplePolicy::Period(10_000),
+            false,
+        )?;
+    }*/
+
     /* --------- Wait ----------- */
 
     let initial_time = (ts.tv_sec * 1_000_000_000 + ts.tv_nsec) as u64;
@@ -173,11 +201,20 @@ async fn main() -> anyhow::Result<()> {
         xdp.detach(link_id)?;
     }
 
+    /* --------- Perf events end ----------- */
+
+    /*
+    for (program, link_id) in perf_events_links {
+        info!("Detaching perf event program {program}");
+        let perf_event: &mut PerfEvent = ebpf.program_mut(&program).unwrap().try_into()?;
+        perf_event.detach(link_id)?;
+    }*/
+
     /* --------- Main program ----------- */
 
     let mut kmalloc_allocations: Queue<_, AllocInfo> = Queue::try_from(ebpf.take_map("KMALLOC_ALLOCATIONS").unwrap())?;
     let mut kmem_cache_allocations: Queue<_, AllocInfo> = Queue::try_from(ebpf.take_map("KMEM_CACHE_ALLOCATIONS").unwrap())?;
-    let registered_functions: EHashMap<_, i64, [u8;STRING_AS_BYTES_MAX_LEN]> = EHashMap::try_from(ebpf.take_map("REGISTERED_FUNCTIONS").unwrap())?;
+    let registered_functions: EHashMap<_, i64, u16> = EHashMap::try_from(ebpf.take_map("REGISTERED_FUNCTIONS").unwrap())?;
     let stack_traces = StackTraceMap::try_from(ebpf.take_map("STACK_TRACES").unwrap())?;
 
     let kmalloc_allocations = collect_queue(&mut kmalloc_allocations, initial_time);
@@ -202,6 +239,8 @@ async fn main() -> anyhow::Result<()> {
     println!();
     println!("CPU frequency: {} Hz", *CPU_FREQUENCY);
 
+    //let cache_misses: maps::HashMap<_, u64, u64> = maps::HashMap::try_from(ebpf.take_map("CACHE_MISSES").unwrap())?;
+
     let function_execution_times: PerCpuHashMap<_, u64, FunctionCall<Function>> = PerCpuHashMap::try_from(ebpf.take_map("FUNCTIONS_EXECUTION_TIMES").unwrap())?;
     let function_execution_times = filter_times(function_execution_times, initial_time);
     let function_execution_times = handle_execution_times(function_execution_times, initial_time);
@@ -224,13 +263,28 @@ async fn main() -> anyhow::Result<()> {
 
     result_file.write_all(execution_times_json.as_bytes())?;
 
-    let xdp_times: maps::HashMap<_, u64, [u8;6]> = maps::HashMap::try_from(ebpf.take_map("XDP_TIMES").unwrap())?;
-    let xdp_times: Vec<(u64, [u8;6])> = xdp_times
+    let xdp_times: maps::HashMap<_, u64, EthHeader> = maps::HashMap::try_from(ebpf.take_map("XDP_TIMES").unwrap())?;
+    let xdp_times: Vec<(u64, String)> = xdp_times
         .iter()
         .filter_map(|x| match x {
-            Ok(mut x) => {
-                x.0 = x.0.saturating_sub(initial_time);
-                Some(x)
+            Ok(x) => {
+                let new_time = x.0.saturating_sub(initial_time);
+
+                let eth_type = match x.1.ether_type {
+                    EtherHeaderType::Loop => "Loop",
+                    EtherHeaderType::Ipv4 => "IPv4",
+                    EtherHeaderType::Arp => "ARP",
+                    EtherHeaderType::Ipv6 => "IPv6",
+                    EtherHeaderType::FibreChannel => "FibreChannel",
+                    EtherHeaderType::Infiniband => "Infiniband",
+                    EtherHeaderType::LoopbackIeee8023 => "LoopbackIeee8023",
+                };
+
+                let src = format!("{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}", x.1.src_addr[0], x.1.src_addr[1], x.1.src_addr[2], x.1.src_addr[3], x.1.src_addr[4], x.1.src_addr[5]);
+                let dst = format!("{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}:{:0>2X}", x.1.dst_addr[0], x.1.dst_addr[1], x.1.dst_addr[2], x.1.dst_addr[3], x.1.dst_addr[4], x.1.dst_addr[5]);
+                let info = format!("{eth_type}, SRC: {src}, DST: {dst}");
+
+                Some((new_time, info))
             }
             Err(_) => None
         })

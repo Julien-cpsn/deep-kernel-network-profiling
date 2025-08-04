@@ -30,7 +30,7 @@ def assign_allocations(df):
         size = row['size']
 
         # Update memory usage for the specific memory_type and total
-        if alloc_direction == 'Malloc':
+        if alloc_direction == 'Alloc':
             memory_usage[alloc_type] += size
             memory_usage['total'] += size
         elif alloc_direction == 'Free':
@@ -67,17 +67,19 @@ def update_text_visibility(event_ax):
     x_min, x_max = event_ax.get_xlim()
     visible_range = x_max - x_min
 
-    threshold = visible_range * 0.0075
+    threshold = visible_range * 0.05
 
     for text, duration, start_time, end_time in texts:
         # Check if bar is visible in the current view and duration is significant
         is_visible = (start_time <= x_max and end_time >= x_min) and (duration >= threshold)
         text.set_visible(is_visible)
 
-used_cpus = sorted(list(dict.fromkeys(time_df["cpuid"])))
+ignored_cpus = [2, 3]
+used_cpus = sorted(list([cpu for cpu in dict.fromkeys(time_df["cpuid"]) if cpu not in ignored_cpus]))
 
 # Create figure and axis
 fig = plt.figure(figsize=((len(used_cpus) + 1) * 4, 12))
+#fig = plt.figure()
 ax_memory = fig.add_subplot(len(used_cpus) + 1, 1, len(used_cpus) + 1)
 first_ax = None
 
@@ -118,7 +120,7 @@ for index, cpuid in enumerate(used_cpus):
         if row['cpuid'] != cpuid:
             continue
 
-        if row["duration"] < 50000:
+        if row["duration"] < 10000:
             text = ax.text(
                 row["start_time"] + row["duration"] / 2,
                 row["depth"],
@@ -149,6 +151,20 @@ for index, cpuid in enumerate(used_cpus):
 
     for xdp_time in xdp_times:
         ax.axvline(x=xdp_time[0], linestyle="--", linewidth=0.5, color='black', alpha=0.5)
+
+        text = ax.text(
+            xdp_time[0] - 10000,
+            0.1,
+            xdp_time[1].replace(", ", "\n"),
+            ha="center",
+            color="black",
+            alpha=0.5,
+            rotation="vertical",
+            size="xx-small",
+            visible=False
+        )
+
+        texts.append((text, 1000000, xdp_time[0] - 500000, xdp_time[0] + 500000))
     # Remove duplicate labels in legend
     #handles, labels = ax.get_legend_handles_labels()
     #by_label = dict(zip(labels, handles))

@@ -1,10 +1,10 @@
 use crate::utils::{mean, median, CPU_FREQUENCY};
+use crate::ARGS;
 use aya::maps::{MapData, PerCpuHashMap};
 use aya_network_deep_profiling_common::{FunctionCall, FunctionDirection, Program};
+use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::HashMap;
-use rayon::prelude::*;
-use crate::ARGS;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ExecutionTimeRow {
@@ -14,7 +14,8 @@ pub struct ExecutionTimeRow {
     pub duration: u64,
     pub inner_duration: u64,
     pub depth: u32,
-    pub cpuid: u32
+    pub cpuid: u32,
+    //pub l1d_cache_misses: u64,
 }
 
 const TIMEOUT: u64 = 60_000_000_000;
@@ -37,7 +38,7 @@ pub fn filter_times<F: Program + 'static>(times: PerCpuHashMap<MapData, u64, Fun
     filtered_times
 }
 
-pub fn handle_execution_times<F: Program>(times: Vec<(u64, FunctionCall<F>)>, initial_time: u64) -> Vec<ExecutionTimeRow> {
+pub fn handle_execution_times<F: Program>(times: Vec<(u64, FunctionCall<F>)>, /*cache_misses: &maps::HashMap<MapData, u64, u64>,*/ initial_time: u64) -> Vec<ExecutionTimeRow> {
     let mut arranged_times: HashMap<String, Vec<u64>> = HashMap::new();
     let mut execution_times: Vec<ExecutionTimeRow> = Vec::new();
 
@@ -60,6 +61,14 @@ pub fn handle_execution_times<F: Program>(times: Vec<(u64, FunctionCall<F>)>, in
                         continue;
                     }
 
+                    /*
+                    let mut l1d_cache_misses = 0;
+                    for (miss_time, miss_count) in cache_misses.iter().filter_map(|c| c.ok()) {
+                        if miss_time >= start_time && miss_time <= time {
+                            l1d_cache_misses += miss_count;
+                        }
+                    }*/
+
                     execution_times.push(ExecutionTimeRow {
                         function_name: function.to_string(),
                         start_time: start_time.saturating_sub(initial_time),
@@ -67,7 +76,8 @@ pub fn handle_execution_times<F: Program>(times: Vec<(u64, FunctionCall<F>)>, in
                         duration,
                         inner_duration: duration,
                         depth,
-                        cpuid
+                        cpuid,
+                        //l1d_cache_misses
                     });
                     arranged_time[len] = duration;
                 }

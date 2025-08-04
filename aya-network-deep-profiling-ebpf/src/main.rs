@@ -11,20 +11,21 @@
 
 pub mod probes;
 pub mod tracepoints;
+pub mod perf_events;
 pub mod xdp;
 pub mod bindings;
 pub mod utils;
 
 use aya_ebpf::macros::map;
 use aya_ebpf::maps::{HashMap, PerCpuHashMap, Queue, StackTrace};
-use aya_network_deep_profiling_common::{AllocInfo, Function, FunctionCall, Alloc, STRING_AS_BYTES_MAX_LEN};
+use aya_network_deep_profiling_common::{Alloc, AllocInfo, EthHeader, Function, FunctionCall};
 
 const MAX_ENTRIES: u32 = 500_000;
 
 // Functions
 
 #[map]
-pub static REGISTERED_FUNCTIONS: HashMap<i64, [u8;STRING_AS_BYTES_MAX_LEN]> = HashMap::with_max_entries(500, 0);
+pub static REGISTERED_FUNCTIONS: HashMap<i64, u16> = HashMap::with_max_entries(500, 0);
 
 #[map]
 static ACTIVE_FUNCTIONS: PerCpuHashMap<u32, bool> = PerCpuHashMap::with_max_entries(MAX_ENTRIES, 0);
@@ -34,6 +35,11 @@ pub static DEPTH_COUNTER: PerCpuHashMap<u32, u32> = PerCpuHashMap::with_max_entr
 
 #[map]
 pub static STACK_TRACES: StackTrace = StackTrace::with_max_entries(MAX_ENTRIES, 0);
+
+/*
+#[map]
+static CACHE_MISSES: HashMap<u64, u64> = HashMap::with_max_entries(MAX_ENTRIES, 0);
+*/
 
 // Memory
 
@@ -58,7 +64,7 @@ pub static FUNCTIONS_EXECUTION_TIMES: PerCpuHashMap<u64, FunctionCall<Function>>
 pub static ALLOCS_EXECUTION_TIMES: PerCpuHashMap<u64, FunctionCall<Alloc>> = PerCpuHashMap::with_max_entries(MAX_ENTRIES, 0);
 
 #[map]
-pub static XDP_TIMES: HashMap<u64, [u8;6]> = HashMap::with_max_entries(MAX_ENTRIES, 0);
+pub static XDP_TIMES: HashMap<u64, EthHeader> = HashMap::with_max_entries(MAX_ENTRIES, 0);
 
 #[cfg(not(test))]
 #[panic_handler]
