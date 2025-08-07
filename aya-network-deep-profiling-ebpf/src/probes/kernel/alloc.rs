@@ -1,0 +1,55 @@
+use crate::log_time;
+
+log_time!(
+    bio_kmalloc,
+    devm_kmalloc,
+    devm_kmalloc_match,
+    devm_kmalloc_release,
+    free_large_kmalloc,
+    kmalloc_fix_flags,
+    kmalloc_reserve,
+    kmalloc_size_roundup,
+    mempool_kmalloc,
+    sock_kmalloc,
+    ___kmalloc_large_node,
+    __kmalloc_cache_node_noprof,
+    __kmalloc_cache_noprof,
+    __kmalloc_large_node_noprof,
+    __kmalloc_large_noprof,
+    __kmalloc_node_noprof,
+    __kmalloc_node_track_caller_noprof,
+    __kmalloc_noprof
+);
+
+log_time!(
+    dev_kfree_skb_any_reason,
+    dev_kfree_skb_irq_reason,
+    kfree,
+    kfree_skb_list_reason,
+    kfree_skb_partial,
+    kfree_skbmem,
+    __kfree_skb,
+    __napi_kfree_skb
+);
+
+log_time!(
+    do_kmem_cache_create,
+    kmem_cache_alloc_bulk_noprof,
+    kmem_cache_alloc_lru_noprof,
+    kmem_cache_alloc_node_noprof,
+    kmem_cache_alloc_noprof,
+    kmem_cache_charge,
+    kmem_cache_destroy,
+    kmem_cache_flags,
+    kmem_cache_free,
+    kmem_cache_free_bulk,
+    kmem_cache_free_bulk_p_part_p_0,
+    kmem_cache_release,
+    kmem_cache_shrink,
+    kmem_cache_size,
+    __kmem_cache_do_shrink,
+    __kmem_cache_empty,
+    __kmem_cache_release,
+    __kmem_cache_shrink,
+    __kmem_cache_shutdown
+);

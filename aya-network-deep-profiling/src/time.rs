@@ -18,7 +18,8 @@ pub struct ExecutionTimeRow {
     //pub l1d_cache_misses: u64,
 }
 
-const TIMEOUT: u64 = 60_000_000_000;
+unsafe impl Send for ExecutionTimeRow {}
+unsafe impl Sync for ExecutionTimeRow {}
 
 pub fn filter_times<F: Program + 'static>(times: PerCpuHashMap<MapData, u64, FunctionCall<F>>, initial_time: u64) -> Vec<(u64, FunctionCall<F>)> {
     let mut filtered_times: Vec<(u64, FunctionCall<F>)> = vec![];
@@ -56,11 +57,6 @@ pub fn handle_execution_times<F: Program>(times: Vec<(u64, FunctionCall<F>)>, /*
                     let start_time = arranged_time[len];
                     let duration = time - arranged_time[len];
 
-                    if duration > ARGS.max_time {
-                        arranged_times.remove(&function);
-                        continue;
-                    }
-
                     /*
                     let mut l1d_cache_misses = 0;
                     for (miss_time, miss_count) in cache_misses.iter().filter_map(|c| c.ok()) {
@@ -91,28 +87,28 @@ pub fn handle_execution_times<F: Program>(times: Vec<(u64, FunctionCall<F>)>, /*
         };
     }
 
-    arranged_times.par_iter_mut().for_each(|(_, a)| a.retain(|e| *e < TIMEOUT));
-    execution_times.retain(|e| e.duration < TIMEOUT);
-
-    execution_times.sort_by_key(|row| (row.start_time, row.depth));
+    arranged_times.par_iter_mut().for_each(|(_, a)| a.retain(|e| *e < ARGS.timeout));
+    execution_times.retain(|e| e.duration < ARGS.timeout);
+    execution_times.par_sort_by_key(|row| (row.start_time, row.depth));
 
     for i in 0..execution_times.len() {
-        let mut child_duration_sum = 0;
         let parent = &execution_times[i];
         let parent_start = parent.start_time + initial_time;
         let parent_end = parent.end_time + initial_time;
         let parent_depth = parent.depth;
 
-        // Look for child calls (higher depth, within parent's time window)
-        for (j, _) in execution_times.iter().enumerate() {
-            if i == j {
-                continue;
-            }
-            let candidate = &execution_times[j];
-            if candidate.depth > parent_depth && candidate.start_time + initial_time >= parent_start && candidate.end_time + initial_time <= parent_end {
-                child_duration_sum += candidate.duration;
-            }
-        }
+            // Look for child calls (higher depth, within parent's time window)
+            let child_duration_sum = execution_times
+                .par_iter()
+                .enumerate()
+                .filter(|&(j, _)| i != j)
+                .filter(|(_, candidate)| {
+                    candidate.depth > parent_depth
+                        && candidate.start_time + initial_time >= parent_start
+                        && candidate.end_time + initial_time <= parent_end
+                })
+                .map(|(_, candidate)| candidate.duration)
+                .sum::<u64>();
 
         // Update inner_duration (ensure non-negative)
         execution_times[i].inner_duration = parent.duration.saturating_sub(child_duration_sum);
@@ -120,21 +116,21 @@ pub fn handle_execution_times<F: Program>(times: Vec<(u64, FunctionCall<F>)>, /*
 
     println!("============================================== Execution Time Statistics ==============================================");
     println!(
-        "{: <35} {:>18} {:>18} {:>22} {:>22}",
-        "Name", "Mean time", "Median time", "Mean cycles", "Median cycles"
+        "{: <35} {:>5} {:>18} {:>18} {:>22} {:>22}",
+        "Name", "Count", "Mean time", "Median time", "Mean cycles", "Median cycles"
     );
     println!("-----------------------------------------------------------------------------------------------------------------------");
 
-    for (function, time) in arranged_times {
-        print!("{function: <35} ");
+    arranged_times.par_iter().for_each(|(function, times)| {
+        print!("{function: <35} {:>5} ", times.len());
 
-        if time.is_empty() {
+        if times.is_empty() {
             println!();
-            continue;
+            return;
         }
 
-        let mean_time = mean(&time);
-        let median_time = median(&time);
+        let mean_time = mean(times);
+        let median_time = median(times);
 
         let mean_cycles = (mean_time as f64 * *CPU_FREQUENCY / 1_000_000_000.0) as u64;
         let median_cycles = (median_time as f64 * *CPU_FREQUENCY / 1_000_000_000.0) as u64;
@@ -145,7 +141,7 @@ pub fn handle_execution_times<F: Program>(times: Vec<(u64, FunctionCall<F>)>, /*
             mean_cycles.to_string(),
             median_cycles.to_string()
         );
-    }
+    });
 
     execution_times
 }

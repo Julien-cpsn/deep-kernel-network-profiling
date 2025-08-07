@@ -11,14 +11,15 @@
 
 pub mod probes;
 pub mod tracepoints;
-pub mod perf_events;
+//pub mod perf_events;
 pub mod xdp;
+pub mod classifiers;
 pub mod bindings;
 pub mod utils;
 
 use aya_ebpf::macros::map;
 use aya_ebpf::maps::{HashMap, PerCpuHashMap, Queue, StackTrace};
-use aya_network_deep_profiling_common::{Alloc, AllocInfo, EthHeader, Function, FunctionCall};
+use aya_network_deep_profiling_common::{Alloc, AllocInfo, EthHeader, FunctionCall, KernelFunction, ThroughputStat, UserFunction};
 
 const MAX_ENTRIES: u32 = 500_000;
 
@@ -58,13 +59,23 @@ static TEMP_KMEM_CACHE_ALLOCATIONS: HashMap<u64, AllocInfo> = HashMap::with_max_
 // Execution times
 
 #[map]
-pub static FUNCTIONS_EXECUTION_TIMES: PerCpuHashMap<u64, FunctionCall<Function>> = PerCpuHashMap::with_max_entries(MAX_ENTRIES, 0);
+pub static KERNEL_FUNCTIONS_EXECUTION_TIMES: PerCpuHashMap<u64, FunctionCall<KernelFunction>> = PerCpuHashMap::with_max_entries(MAX_ENTRIES, 0);
+
 
 #[map]
-pub static ALLOCS_EXECUTION_TIMES: PerCpuHashMap<u64, FunctionCall<Alloc>> = PerCpuHashMap::with_max_entries(MAX_ENTRIES, 0);
+pub static USER_FUNCTIONS_EXECUTION_TIMES: PerCpuHashMap<u64, FunctionCall<UserFunction>> = PerCpuHashMap::with_max_entries(MAX_ENTRIES, 0);
+
+#[map]
+pub static ALLOC_FUNCTIONS_EXECUTION_TIMES: PerCpuHashMap<u64, FunctionCall<Alloc>> = PerCpuHashMap::with_max_entries(MAX_ENTRIES, 0);
 
 #[map]
 pub static XDP_TIMES: HashMap<u64, EthHeader> = HashMap::with_max_entries(MAX_ENTRIES, 0);
+
+// Throughput stats
+
+#[map]
+pub static THROUGHPUT_STATS: Queue<ThroughputStat> = Queue::with_max_entries(MAX_ENTRIES, 0);
+
 
 #[cfg(not(test))]
 #[panic_handler]

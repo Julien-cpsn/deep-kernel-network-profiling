@@ -1,4 +1,9 @@
 #![no_std]
+#![allow(unused_variables)]
+#![allow(unused_attributes)]
+#![allow(unused_doc_comments)]
+#![allow(unreachable_code)]
+#![allow(unreachable_patterns)]
 
 use core::fmt;
 use core::fmt::Debug;
@@ -63,7 +68,7 @@ enum_display! {
     #[allow(non_camel_case_types)]
     #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
     #[repr(u16)]
-    pub enum Function {
+    pub enum KernelFunction {
         /* ===== Physical layer processing ===== */
 
         /* --- Packet Reception --- */
@@ -74,6 +79,8 @@ enum_display! {
         //__common_interrupt,
         /// Polling function for virtual network devices (e.g., virtio-net).
         //virtnet_poll,
+        /// Polling function for E1000 network devices.
+        e1000_netpoll,
         /// Allocates socket buffers during NAPI polling.
         //napi_alloc_skb,
         /// Processes packets in the softirq context, invoked by the NAPI polling mechanism.
@@ -190,7 +197,8 @@ enum_display! {
         /// Handles transmission of locally generated IP packets (e.g., from sockets). This complements ip_output for locally originated traffic.
         ip_queue_xmit,
         /// Transmits a packet on the hardware
-        start_xmit,
+        //start_xmit,
+        netpoll_start_xmit,
         /// Processes packets in the output queue of a network device, ensuring proper scheduling and traffic control (e.g., QoS policies).
         __qdisc_run,
         /// Attempts to directly transmit packets without queuing if the device is ready, optimizing performance.
@@ -221,6 +229,68 @@ enum_display! {
         netif_carrier_off,
         netif_carrier_event,
         */
+
+        /* --- XDP --- */
+        /// Processes packets in a software-based XDP layer before passing them to the network stack.
+        do_xdp_generic,
+        /// Handles the XDP_REDIRECT action, redirecting the packet to another interface or CPU using an eBPF map
+        xdp_do_redirect,
+
+        /* --- BPF --- */
+        bpf_xdp_redirect,
+        bpf_msg_redirect_map,
+        bpf_sk_redirect_map,
+        bpf_xdp_redirect_map
+    }
+}
+
+enum_display! {
+    #[allow(non_camel_case_types)]
+    #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+    #[cfg_attr(any(feature = "dpdk", feature = "vpp"), repr(u16))]
+    pub enum UserFunction {
+        /* ===== DPDK ===== */
+        /// Receives a burst of packets from a specified RX queue into an array of mbufs.
+        #[cfg(feature = "dpdk")]
+        rte_eth_rx_burst_mode_get => "/usr/lib/x86_64-linux-gnu/librte_ethdev.so",
+        #[cfg(feature = "dpdk")]
+        rte_malloc => "/usr/lib/x86_64-linux-gnu/librte_eal.so",
+
+        /* ===== VPP ===== */
+
+        #[cfg(feature = "vpp")]
+        dpdk_input_node_fn_hsw => "/usr/lib/x86_64-linux-gnu/vpp_plugins/dpdk_plugin.so",
+        #[cfg(feature = "vpp")]
+        dpdk_input_node_fn_icl => "/usr/lib/x86_64-linux-gnu/vpp_plugins/dpdk_plugin.so",
+        #[cfg(feature = "vpp")]
+        dpdk_input_node_fn_skx => "/usr/lib/x86_64-linux-gnu/vpp_plugins/dpdk_plugin.so",
+
+        #[cfg(feature = "vpp")]
+        crypto_dispatch_node_fn => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
+        #[cfg(feature = "vpp")]
+        crypto_dispatch_node_fn_hsw => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
+        #[cfg(feature = "vpp")]
+        crypto_dispatch_node_fn_icl => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
+        #[cfg(feature = "vpp")]
+        crypto_dispatch_node_fn_skx => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
+
+        #[cfg(feature = "vpp")]
+        bier_disp_dispatch_node_fn => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
+        #[cfg(feature = "vpp")]
+        bier_disp_dispatch_node_fn_hsw => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
+        #[cfg(feature = "vpp")]
+        bier_disp_dispatch_node_fn_icl => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
+        #[cfg(feature = "vpp")]
+        bier_disp_dispatch_node_fn_skx => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
+
+        #[cfg(feature = "vpp")]
+        punt_dispatch_node_fn => "/usr/lib/x86_64-linux-gnu/libvlib.so.25.06",
+        #[cfg(feature = "vpp")]
+        punt_dispatch_node_fn_hsw => "/usr/lib/x86_64-linux-gnu/libvlib.so.25.06",
+        #[cfg(feature = "vpp")]
+        punt_dispatch_node_fn_icl => "/usr/lib/x86_64-linux-gnu/libvlib.so.25.06",
+        #[cfg(feature = "vpp")]
+        punt_dispatch_node_fn_skx => "/usr/lib/x86_64-linux-gnu/libvlib.so.25.06",
     }
 }
 
@@ -229,43 +299,56 @@ enum_display! {
     #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
     #[repr(u8)]
     pub enum Alloc {
-        // Kmalloc
-        bpf_map_kmalloc_node,
-        mempool_kmalloc,
-        //__traceiter_kmalloc,
-        //__probestub_kmalloc,
-        kmalloc_size_roundup,
-        free_large_kmalloc,
-        ___kmalloc_large_node,
-        __kmalloc_large_noprof,
-        __kmalloc_large_node_noprof,
-        __kmalloc_noprof,
-        __kmalloc_node_track_caller_noprof,
-        __kmalloc_cache_node_noprof,
-        __kmalloc_node_noprof,
-        __kmalloc_cache_noprof,
+        // kmalloc
         bio_kmalloc,
+        devm_kmalloc,
         devm_kmalloc_match,
         devm_kmalloc_release,
-        devm_kmalloc,
-        sock_kmalloc,
+        free_large_kmalloc,
+        kmalloc_fix_flags,
         kmalloc_reserve,
-        kmalloc_fix_flags
+        kmalloc_size_roundup,
+        mempool_kmalloc,
+        sock_kmalloc,
+        ___kmalloc_large_node,
+        __kmalloc_cache_node_noprof,
+        __kmalloc_cache_noprof,
+        __kmalloc_large_node_noprof,
+        __kmalloc_large_noprof,
+        __kmalloc_node_noprof,
+        __kmalloc_node_track_caller_noprof,
+        __kmalloc_noprof,
 
-        // KFree
-        kfree,
-        //__traceiter_kfree,
-        //__probestub_kfree,
-        kfree_skbmem,
-        kfree_skb_list_reason,
-        __kfree_skb,
-        kfree_skb_partial,
-        __napi_kfree_skb,
-        dev_kfree_skb_irq_reason,
+        // kfree
         dev_kfree_skb_any_reason,
-        //__traceiter_kfree_skb,
-        //__probestub_kfree_skb
+        dev_kfree_skb_irq_reason,
+        kfree,
+        kfree_skb_list_reason,
+        kfree_skb_partial,
+        kfree_skbmem,
+        __kfree_skb,
+        __napi_kfree_skb,
 
+        // kmem_cache
+        do_kmem_cache_create,
+        kmem_cache_alloc_bulk_noprof,
+        kmem_cache_alloc_lru_noprof,
+        kmem_cache_alloc_node_noprof,
+        kmem_cache_alloc_noprof,
+        kmem_cache_charge,
+        kmem_cache_destroy,
+        kmem_cache_flags,
+        kmem_cache_free,
+        kmem_cache_free_bulk,
+        kmem_cache_free_bulk_p_part_p_0,
+        kmem_cache_release,
+        kmem_cache_shrink,
+        kmem_cache_size,
+        __kmem_cache_do_shrink,
+        __kmem_cache_empty,
+        __kmem_cache_release,
+        __kmem_cache_shrink,
+        __kmem_cache_shutdown,
         /*
         /// Allocates socket buffers for packet processing.
         __alloc_skb,
@@ -300,6 +383,24 @@ enum_display! {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "user", derive(Serialize))]
+#[repr(C, packed)]
+pub struct ThroughputStat {
+    pub timestamp: u64,
+    pub packet_size: u32,
+    pub direction: PacketDirection,
+    pub if_index: u32
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "user", derive(Serialize))]
+#[repr(u8)]
+pub enum PacketDirection {
+    Ingress,
+    Egress,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[repr(C, packed)]
 pub struct EthHeader {
     pub dst_addr: [u8; 6],
@@ -325,8 +426,44 @@ mod user {
     use aya::Pod;
 
     unsafe impl Pod for AllocInfo {}
-    unsafe impl Pod for Function {}
+    unsafe impl Pod for KernelFunction {}
+    unsafe impl Pod for UserFunction {}
+    unsafe impl Pod for Alloc {}
     unsafe impl Pod for FunctionDirection {}
     unsafe impl<F: Program + 'static> Pod for FunctionCall<F> {}
+    unsafe impl Pod for ThroughputStat {}
+    unsafe impl Pod for PacketDirection {}
     unsafe impl Pod for EthHeader {}
+
+
+    unsafe impl Send for AllocInfo {}
+    unsafe impl Sync for AllocInfo {}
+
+    unsafe impl Send for KernelFunction {}
+    unsafe impl Sync for KernelFunction {}
+
+    unsafe impl Send for UserFunction {}
+    unsafe impl Sync for UserFunction {}
+
+    unsafe impl Send for Alloc {}
+    unsafe impl Sync for Alloc {}
+
+    unsafe impl Send for FunctionDirection {}
+    unsafe impl Sync for FunctionDirection {}
+
+    unsafe impl<F: Program + Send + Sync> Send for FunctionCall<F> {}
+    unsafe impl<F: Program + Send + Sync> Sync for FunctionCall<F> {}
+
+    unsafe impl Send for ThroughputStat {}
+    unsafe impl Sync for ThroughputStat {}
+
+    unsafe impl Send for PacketDirection {}
+    unsafe impl Sync for PacketDirection {}
+
+    unsafe impl Send for EthHeader {}
+    unsafe impl Sync for EthHeader {}
+
+    unsafe impl Send for EtherHeaderType {}
+    unsafe impl Sync for EtherHeaderType {}
+
 }

@@ -1,8 +1,8 @@
-use crate::ARGS;
+use crate::{ARGS, FUNCTIONS};
 use aya::maps::{HashMap as EHashMap, MapData, Queue, StackTraceMap};
 use aya::util::kernel_symbols;
 use aya_network_deep_profiling::MemStat;
-use aya_network_deep_profiling_common::{Alloc, AllocDirection, AllocInfo, FUNCTIONS};
+use aya_network_deep_profiling_common::{Alloc, AllocDirection, AllocInfo};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
@@ -73,7 +73,7 @@ pub fn handle_memory_usage(allocations: &mut Vec<AllocInfo>, registered_function
     );
     println!("-------------------------------------------------------------------------------------------------");
 
-    for (stack_id, mem_stat) in memory_stats.iter() {
+    memory_stats.par_iter().for_each(|(stack_id, mem_stat)| {
         let function_name = match registered_functions.get(stack_id, 0) {
             Ok(function_id) => Alloc::from_id(function_id).to_string(),
             Err(_) => String::from("Unknown")
@@ -132,7 +132,7 @@ pub fn handle_memory_usage(allocations: &mut Vec<AllocInfo>, registered_function
                 }
             }
         }
-    }
+    });
 
     Ok(())
 }

@@ -1,9 +1,13 @@
 #[macro_export]
 macro_rules! profile_function {
-    ($($function:ident),*$(,)?) => {
+    (
+        $function_type:expr,
+        $probe_type:expr,
+        $($function:ident),*$(,)?
+    ) => {
         paste::paste! {
             $(
-                #[aya_ebpf::macros::kprobe]
+                #[aya_ebpf::macros::[<$probe_type:lower probe>]]
                 pub fn [<probe_enter_ $function>](_ctx: aya_ebpf::programs::ProbeContext) -> u32 {
                     match [<probe_try_enter_ $function>]() {
                         Ok(ret) => ret,
@@ -24,12 +28,12 @@ macro_rules! profile_function {
                         _ => return Err(0),
                     };*/
 
-                    let function = aya_network_deep_profiling_common::Function::$function;
+                    let function = aya_network_deep_profiling_common::[<$function_type:camel Function>]::$function;
                     let direction = aya_network_deep_profiling_common::FunctionDirection::Entry;
 
                     //crate::utils::log::log_ctx(crate::utils::log::LogType::Debug, &fctx.ctx, function.as_str(), Some(direction));
                     let depth = crate::utils::function::increment_depth(&cpuid)?;
-                    crate::utils::time::log_function_time(function, direction, depth, cpuid)?;
+                    crate::utils::time::[<log_ $function_type:snake:lower _time>](function, direction, depth, cpuid)?;
                     crate::utils::function::set_function_active(&cpuid, true)?;
                     //crate::utils::function::register_function(&stack_id, function.as_id())?;
 
@@ -37,7 +41,7 @@ macro_rules! profile_function {
                 }
 
 
-                #[aya_ebpf::macros::kretprobe]
+                #[aya_ebpf::macros::[<$probe_type:lower retprobe>]]
                 pub fn [<probe_ret_ $function>](_ctx: aya_ebpf::programs::RetProbeContext) -> u32 {
                     match [<probe_try_ret_ $function>]() {
                         Ok(ret) => ret,
@@ -53,12 +57,12 @@ macro_rules! profile_function {
                 fn [<probe_try_ret_ $function>]() -> Result<u32, u32> {
                     let cpuid = unsafe { aya_ebpf::helpers::bpf_get_smp_processor_id() } as u32;
 
-                    let function = aya_network_deep_profiling_common::Function::$function;
+                    let function = aya_network_deep_profiling_common::[<$function_type:camel Function>]::$function;
                     let direction = aya_network_deep_profiling_common::FunctionDirection::Exit;
 
                     //crate::utils::log::log_ctx(crate::utils::log::LogType::Debug, &fctx.ctx, function.as_str(), Some(direction));
                     let depth = crate::utils::function::decrement_depth(&cpuid)?;
-                    crate::utils::time::log_function_time(function, direction, depth, cpuid)?;
+                    crate::utils::time::[<log_ $function_type:snake:lower _time>](function, direction, depth, cpuid)?;
                     crate::utils::function::set_function_active(&cpuid, false)?;
 
                     Ok(0)
@@ -110,7 +114,7 @@ macro_rules! alloc {
                     crate::[<$alloc_type:upper _ALLOCATIONS>].push(&alloc_info, 0).map_err(|_| 0u32)?;
                     crate::[<TEMP_ $alloc_type:upper _ALLOCATIONS>].insert(&ptr, &alloc_info, 0).map_err(|_| 0u32)?;
 
-                    aya_log_ebpf::debug!(&fctx.ctx, "ALLOC {} at {:X}", size, ptr);
+                    aya_log_ebpf::trace!(&fctx.ctx, "ALLOC {} at {:X}", size, ptr);
 
                     Ok(0)
                 }
@@ -163,7 +167,7 @@ macro_rules! free {
                     crate::[<$alloc_type:upper _ALLOCATIONS>].push(&alloc_info, 0).map_err(|_| 0u32)?;
                     crate::[<TEMP_ $alloc_type:upper _ALLOCATIONS>].remove(&ptr).map_err(|_| 0u32)?;
 
-                    aya_log_ebpf::debug!(&fctx.ctx, "FREED {} at {:X}", *size, ptr);
+                    aya_log_ebpf::trace!(&fctx.ctx, "FREED {} at {:X}", *size, ptr);
 
                     Ok(0)
                 }

@@ -3,10 +3,13 @@ name = "aya-network-deep-profiling-ebpf"
 version = "0.1.0"
 edition.workspace = true
 
+[features]
+default = []
+dpdk = ["aya-network-deep-profiling-common/dpdk"]
+vpp = ["aya-network-deep-profiling-common/vpp"]
+
 [dependencies]
 aya-network-deep-profiling-common = { path = "../aya-network-deep-profiling-common" }
-
-network-types = { workspace = true }
 
 aya-ebpf = { workspace = true }
 aya-log-ebpf = { workspace = true }

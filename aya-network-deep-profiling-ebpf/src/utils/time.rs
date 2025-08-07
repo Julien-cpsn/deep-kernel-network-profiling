@@ -1,27 +1,25 @@
-use crate::{ALLOCS_EXECUTION_TIMES, FUNCTIONS_EXECUTION_TIMES};
-use aya_ebpf::helpers::bpf_ktime_get_ns;
-use aya_network_deep_profiling_common::{Alloc, Function, FunctionCall, FunctionDirection};
+macro_rules! log_time {
+    ($($name:expr, $function_enumeration:expr),*) => {
+        paste::paste! {
+            $(
+                pub fn [<log_ $name:snake:lower _time>](function: aya_network_deep_profiling_common::$function_enumeration, direction: aya_network_deep_profiling_common::FunctionDirection, depth: u32, cpuid: u32) -> Result<(), u32> {
+                    let time = unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() };
+                    let function_call = aya_network_deep_profiling_common::FunctionCall {
+                        function,
+                        direction,
+                        depth,
+                        cpuid
+                    };
 
-pub fn log_function_time(function: Function, direction: FunctionDirection, depth: u32, cpuid: u32) -> Result<(), u32> {
-    let time = unsafe { bpf_ktime_get_ns() };
-    let function_call = FunctionCall {
-        function,
-        direction,
-        depth,
-        cpuid
+                    crate::[<$name:snake:upper _FUNCTIONS_EXECUTION_TIMES>].insert(&time, &function_call, 0).map_err(|_| 0u32)
+                }
+            )*
+        }
     };
-
-    FUNCTIONS_EXECUTION_TIMES.insert(&time, &function_call, 0).map_err(|_| 0u32)
 }
 
-pub fn log_alloc_time(function: Alloc, direction: FunctionDirection, depth: u32, cpuid: u32) -> Result<(), u32> {
-    let time = unsafe { bpf_ktime_get_ns() };
-    let function_call = FunctionCall {
-        function,
-        direction,
-        depth,
-        cpuid
-    };
-
-    ALLOCS_EXECUTION_TIMES.insert(&time, &function_call, 0).map_err(|_| 0u32)
-}
+log_time!(
+    kernel, KernelFunction,
+    user, UserFunction,
+    alloc, Alloc
+);

@@ -4,17 +4,34 @@ import pandas as pd
 import numpy as np
 import math
 import json
+import sys
 
-f = open('shared/execution_times.json', 'r')
+if len(sys.argv) > 1:
+    file_path = sys.argv[1]
+else:
+    file_path = 'shared/results.json'
+
+if len(sys.argv) > 2:
+    time_filter = sys.argv[2]
+    time_filter = time_filter.split('-')
+    time_filter[0] = int(time_filter[0])
+    time_filter[1] = int(time_filter[1])
+else:
+    time_filter = None
+
+f = open(file_path, 'r')
 data = json.load(f)
 
 # Convert to DataFrame for easier handling
-time_df = pd.json_normalize(data, meta=["function_name", "start_time", "end_time", "duration", "inner_duration", "depth", "cpuid"])
+time_df = pd.json_normalize(data['execution_times'], meta=["function_name", "start_time", "end_time", "duration", "inner_duration", "depth", "cpuid"])
+
+if time_filter is not None:
+    time_df = time_df.query(f'start_time >= {time_filter[0]} and start_time <= {time_filter[1]}')
+    time_df['start_time'] = time_df['start_time'].apply(lambda x: x - time_filter[0])
+    time_df['end_time'] = time_df['end_time'].apply(lambda x: x - time_filter[0])
+
 time_df['depth'] = time_df['depth'].apply(lambda x: x/10)
 time_df['inner_duration_perc'] = time_df['inner_duration'] * 100 / time_df['duration']
-
-f = open('shared/allocations.json', 'r')
-data = json.load(f)
 
 def assign_allocations(df):
     memory_usage = {'kmalloc': 0, 'kmem_cache': 0, 'total': 0}
@@ -53,11 +70,13 @@ def assign_allocations(df):
     return cumulative_memory, timestamps
 
 # Convert to DataFrame for easier handling
-allocations_df = pd.json_normalize(data, meta=["alloc_type", "alloc_direction", "size", "timestamp"])
-cumulative_memory,timestamps = assign_allocations(allocations_df)
+allocations_df = pd.json_normalize(data['allocations'], meta=["alloc_type", "alloc_direction", "size", "timestamp"])
 
-f = open('shared/xdp_times.json', 'r')
-xdp_times = json.load(f)
+if time_filter is not None:
+    allocations_df = allocations_df.query(f'timestamp >= {time_filter[0]} and timestamp <= {time_filter[1]}')
+    allocations_df['timestamp'] = allocations_df['timestamp'].apply(lambda x: x - time_filter[0])
+
+cumulative_memory,timestamps = assign_allocations(allocations_df)
 
 texts = []
 
@@ -74,7 +93,14 @@ def update_text_visibility(event_ax):
         is_visible = (start_time <= x_max and end_time >= x_min) and (duration >= threshold)
         text.set_visible(is_visible)
 
-ignored_cpus = [2, 3]
+
+xdp_times_df = pd.DataFrame(data['xdp_times'], columns=['timestamp', 'text'])
+
+if time_filter is not None:
+    xdp_times_df = xdp_times_df.query(f'timestamp >= {time_filter[0]} and timestamp <= {time_filter[1]}')
+    xdp_times_df['timestamp'] = xdp_times_df['timestamp'].apply(lambda x: x - time_filter[0])
+
+ignored_cpus = []
 used_cpus = sorted(list([cpu for cpu in dict.fromkeys(time_df["cpuid"]) if cpu not in ignored_cpus]))
 
 # Create figure and axis
@@ -149,22 +175,22 @@ for index, cpuid in enumerate(used_cpus):
     ax.callbacks.connect('xlim_changed', update_text_visibility)
     update_text_visibility(ax)
 
-    for xdp_time in xdp_times:
-        ax.axvline(x=xdp_time[0], linestyle="--", linewidth=0.5, color='black', alpha=0.5)
-
+    for i, row in xdp_times_df.iterrows():
+        ax.axvline(x=row['timestamp'], linestyle="--", linewidth=0.5, color='black', alpha=0.5)
         text = ax.text(
-            xdp_time[0] - 10000,
+            row['timestamp'] - 10000,
             0.1,
-            xdp_time[1].replace(", ", "\n"),
+            row['text'].replace(", ", "\n"),
             ha="center",
             color="black",
             alpha=0.5,
             rotation="vertical",
-            size="xx-small",
+            size="x-small",
             visible=False
         )
 
-        texts.append((text, 1000000, xdp_time[0] - 500000, xdp_time[0] + 500000))
+        #texts.append((text, 1000000, row['timestamp'] - 500000, row['timestamp'] + 500000))
+
     # Remove duplicate labels in legend
     #handles, labels = ax.get_legend_handles_labels()
     #by_label = dict(zip(labels, handles))

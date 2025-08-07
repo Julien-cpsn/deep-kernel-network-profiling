@@ -8,7 +8,7 @@ pub struct Args {
     pub trace: bool,
 
     #[arg(long, default_value_t = 5_000_000_000)]
-    pub max_time: u64,
+    pub timeout: u64,
 
     #[command(flatten)]
     pub verbosity: Verbosity,

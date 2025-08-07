@@ -7,7 +7,10 @@ license.workspace = true
 
 [features]
 default = []
-user = ["aya", "serde"]
+user = ["aya", "serde", "rayon"]
+
+dpdk = []
+vpp = []
 
 [dependencies]
 paste = { workspace = true }
@@ -15,6 +18,7 @@ variant_count = { workspace = true }
 
 aya = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
 
 [lib]
 path = "src/lib.rs"

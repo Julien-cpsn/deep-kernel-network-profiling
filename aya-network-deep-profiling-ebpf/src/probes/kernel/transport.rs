@@ -1,0 +1,23 @@
+use crate::profile_function;
+
+profile_function!(Kernel, k,
+    tcp_v4_rcv,
+    udp_rcv,
+    tcp_v4_do_rcv,
+    udp_queue_rcv_skb,
+    __tcp_transmit_skb,
+    udp_send_skb,
+    skb_queue_tail,
+    vsock_queue_rcv_skb,
+    __sock_queue_rcv_skb,
+    dev_hard_start_xmit,
+    ip_output,
+    ip_finish_output,
+    ip_finish_output2,
+    ip_queue_xmit,
+    //start_xmit,
+    netpoll_start_xmit,
+    __qdisc_run,
+    sch_direct_xmit,
+    neigh_resolve_output,
+);
