@@ -121,16 +121,16 @@ pub fn handle_execution_times<F: Program>(times: Vec<(u64, FunctionCall<F>)>, /*
     );
     println!("-----------------------------------------------------------------------------------------------------------------------");
 
-    arranged_times.par_iter().for_each(|(function, times)| {
+    for (function, times) in arranged_times {
         print!("{function: <35} {:>5} ", times.len());
 
         if times.is_empty() {
             println!();
-            return;
+            continue;
         }
 
-        let mean_time = mean(times);
-        let median_time = median(times);
+        let mean_time = mean(&times);
+        let median_time = median(&times);
 
         let mean_cycles = (mean_time as f64 * *CPU_FREQUENCY / 1_000_000_000.0) as u64;
         let median_cycles = (median_time as f64 * *CPU_FREQUENCY / 1_000_000_000.0) as u64;
@@ -141,7 +141,7 @@ pub fn handle_execution_times<F: Program>(times: Vec<(u64, FunctionCall<F>)>, /*
             mean_cycles.to_string(),
             median_cycles.to_string()
         );
-    });
+    }
 
     execution_times
 }

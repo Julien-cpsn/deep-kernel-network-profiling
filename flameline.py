@@ -8,10 +8,15 @@ import math
 import json
 import sys
 
-def assign_allocations(df):
+def assign_allocations(df, time_filter):
+    if time_filter is not None:
+        start_time = time_filter[0] - 1
+    else:
+        start_time = 0
+
     memory_usage = {'kmalloc': 0, 'kmem_cache': 0, 'total': 0}
     cumulative_memory = {'kmalloc': [0], 'kmem_cache': [0], 'total': [0]}
-    timestamps = {'kmalloc': [0], 'kmem_cache': [0], 'total': [0]}
+    timestamps = {'kmalloc': [start_time], 'kmem_cache': [start_time], 'total': [start_time]}
 
     # Sort by timestamp to ensure chronological order
     df = df.sort_values('timestamp').reset_index(drop=True)
@@ -46,10 +51,10 @@ def assign_allocations(df):
 
 
 # Function to update text visibility based on zoom
-def update_text_visibility(event_ax, fig, ax):
+def update_text_visibility(event_ax, fig, ax, threshold):
     x_min, x_max = event_ax.get_xlim()
     visible_range = x_max - x_min
-    threshold = visible_range * 0.025
+    threshold = visible_range * float(threshold)
 
     for text, duration, start_time, end_time in texts:
         is_visible = (start_time <= x_max and end_time >= x_min) and (duration >= threshold)
@@ -61,7 +66,7 @@ def update_text_visibility(event_ax, fig, ax):
             ax.draw_artist(text)
     fig.canvas.blit(ax.bbox)
 
-def plot_stack_merged(time_df, ax, time_filter):
+def plot_stack_merged(time_df, ax, time_filter, no_stack_labels, vertical_label):
     # Assign colors to functions (optional: use a colormap or hash function names)
     norm = plt.Normalize(0, 100)
     cmap = cm.autumn.reversed()
@@ -80,43 +85,45 @@ def plot_stack_merged(time_df, ax, time_filter):
             label=row["function_name"]
         )
 
-    for i, row in time_df.iterrows():
-        if row["duration"] < 10000:
-            text = ax.text(
-                row["start_time"] + row["duration"] / 2,
-                row["depth"],
-                row["function_name"],
-                ha="center",
-                va="center",
-                color="black",
-                rotation="vertical",
-                size="small",
-                visible=False
-            )
-        else:
-            text = ax.text(
-                row["start_time"] + row["duration"] / 2,
-                row["depth"],
-                row["function_name"],
-                ha="center",
-                va="center",
-                color="black",
-                size="small",
-                visible=False
-            )
+    if not no_stack_labels:
+        for i, row in time_df.iterrows():
+            if row["duration"] < vertical_label:
+                text = ax.text(
+                    row["start_time"] + row["duration"] / 2,
+                    row["depth"],
+                    row["function_name"],
+                    ha="center",
+                    va="center",
+                    color="black",
+                    rotation="vertical",
+                    size="small",
+                    visible=False
+                )
+            else:
+                text = ax.text(
+                    row["start_time"] + row["duration"] / 2,
+                    row["depth"],
+                    row["function_name"],
+                    ha="center",
+                    va="center",
+                    color="black",
+                    size="small",
+                    visible=False
+                )
 
-        texts.append((text, row['duration'], row['start_time'], row['end_time']))
+            texts.append((text, row['duration'], row['start_time'], row['end_time']))
 
-    ax.set_xlim(left=0)
+    if time_filter is None:
+        ax.set_xlim(left=0)
     ax.set_ylabel("Call Stack Depth")
     ax.set_yticklabels([])
 
-def plot_stack_per_cpu(time_df, cpuid, ax, time):
+def plot_stack_per_cpu(time_df, cpuid, ax, time, no_stack_labels, vertical_label):
     # Assign colors to functions (optional: use a colormap or hash function names)
     norm = plt.Normalize(0, 100)
     cmap = cm.autumn.reversed()
 
-    inner_time_df = time_df.query(f'cpuid == {cpuid}')
+    inner_time_df = time_df.query('cpuid == @cpuid')
 
     # Plot each function call as a horizontal bar
     for i, row in inner_time_df.sort_values(by=['function_name']).iterrows():
@@ -131,46 +138,48 @@ def plot_stack_per_cpu(time_df, cpuid, ax, time):
             label=row["function_name"]
         )
 
+    if not no_stack_labels:
+        for i, row in inner_time_df.iterrows():
+            if row["duration"] < vertical_label:
+                text = ax.text(
+                    row["start_time"] + row["duration"] / 2,
+                    row["depth"],
+                    row["function_name"],
+                    ha="center",
+                    va="center",
+                    color="black",
+                    rotation="vertical",
+                    size="small",
+                    visible=False
+                )
+            else:
+                text = ax.text(
+                    row["start_time"] + row["duration"] / 2,
+                    row["depth"],
+                    row["function_name"],
+                    ha="center",
+                    va="center",
+                    color="black",
+                    size="small",
+                    visible=False
+                )
+
+            texts.append((text, row['duration'], row['start_time'], row['end_time']))
+
+    if time_filter is None:
+        ax.set_xlim(left=0)
     ax.set_title(f"CPU {cpuid}")
     ax.set_ylabel("Call Stack Depth")
     ax.set_yticklabels([])
-
-    # Optional: Add function names as text labels on bars
-    for i, row in inner_time_df.iterrows():
-        if row["duration"] < 10000:
-            text = ax.text(
-                row["start_time"] + row["duration"] / 2,
-                row["depth"],
-                row["function_name"],
-                ha="center",
-                va="center",
-                color="black",
-                rotation="vertical",
-                size="small",
-                visible=False
-            )
-        else:
-            text = ax.text(
-                row["start_time"] + row["duration"] / 2,
-                row["depth"],
-                row["function_name"],
-                ha="center",
-                va="center",
-                color="black",
-                size="small",
-                visible=False
-            )
-
-        texts.append((text, row['duration'], row['start_time'], row['end_time']))
 
 def plot_memory(data, ax, time_filter):
     allocations_df = pd.json_normalize(data['allocations'], meta=["alloc_type", "alloc_direction", "size", "timestamp"])
 
     if time_filter is not None:
-        allocations_df = allocations_df.query(f'timestamp >= {time_filter[0]} and timestamp <= {time_filter[1]}')
-        allocations_df.loc[:, 'timestamp'] -= time_filter[0]
+        allocations_df = allocations_df.query('timestamp >= @time_filter[0] and timestamp <= @time_filter[1]')
+        #allocations_df['timestamp'] -= time_filter[0]
 
-    cumulative_memory, timestamps = assign_allocations(allocations_df)
+    cumulative_memory, timestamps = assign_allocations(allocations_df, time_filter)
 
     ax.yaxis.tick_right()
     ax.set_ylabel("Memory usage\n(Bytes)")
@@ -189,8 +198,10 @@ def plot_throughput(data, ax, time_filter):
     time_window = 1_000_000_000.0
 
     if time_filter is not None:
-        throughput_df = throughput_df.query(f'timestamp >= {time_filter[0] - time_window} and timestamp <= {time_filter[1] + time_window}')
-        throughput_df.loc[:, 'timestamp'] -= time_filter[0]
+        time_filter_start = time_filter[0] - time_window
+        time_filter_end = time_filter[1] + time_window
+        throughput_df = throughput_df.query('timestamp >= @time_filter_start and timestamp <= @time_filter_end')
+        #throughput_df['timestamp'] -= time_filter[0]
 
     # Calculate time bins (floor of timestamp in seconds)
     throughput_df['time_bin'] = (throughput_df['timestamp'] // time_window) * time_window
@@ -211,7 +222,7 @@ def plot_throughput(data, ax, time_filter):
 
     used_interfaces = sorted(list([interface for interface in dict.fromkeys(throughput_df['interface'])]))
 
-    colormap = cm.get_cmap('tab20b', len(used_interfaces)).reversed()
+    colormap = cm.get_cmap('Set2', len(used_interfaces))
     interface_colors = {
         iface: colormap(i)
         for i, iface in enumerate(used_interfaces)
@@ -226,12 +237,11 @@ def plot_throughput(data, ax, time_filter):
             else:
                 line_style = '--'
 
-            interface_df = throughput_df.query(f'interface == "{interface}" and direction == "{direction}"')
+            interface_df = throughput_df.query('interface == @interface and direction == @direction')
             ax.plot(
                 interface_df['time_bin'],
                 interface_df['throughput'],
                 alpha=1,
-                marker='o',
                 linestyle=line_style,
                 label=f'raw {interface} {direction.lower()}',
                 color=color
@@ -240,8 +250,8 @@ def plot_throughput(data, ax, time_filter):
     ax.yaxis.tick_right()
     ax.set_ylabel("Throughput\n(Mbps)")
 
-    ax.plot(throughput_df['time_bin'], throughput_df['throughput_smoothed'], marker='o', linestyle='-', label="Smoothed total", color="black")
-    ax.plot(throughput_df['time_bin'], throughput_df['throughput'], alpha=0.25, marker='o', linestyle='-', label="Raw total", color="black")
+    ax.plot(throughput_df['time_bin'], throughput_df['throughput_smoothed'], linestyle='-', label="Smoothed total", color="black")
+    ax.plot(throughput_df['time_bin'], throughput_df['throughput'], alpha=0.25, linestyle='-', label="Raw total", color="black")
     ax.grid(True, linestyle='--', alpha=0.7)
 
     handles, labels = ax.get_legend_handles_labels()
@@ -252,8 +262,8 @@ def plot_xdp(data, ax, time_filter, xdp_labels):
     xdp_times_df = pd.DataFrame(data['xdp_times'], columns=['timestamp', 'text'])
 
     if time_filter is not None:
-        xdp_times_df = xdp_times_df.query(f'timestamp >= {time_filter[0]} and timestamp <= {time_filter[1]}')
-        xdp_times_df.loc[:, 'timestamp'] -= time_filter[0]
+        xdp_times_df = xdp_times_df.query('timestamp >= @time_filter[0] and timestamp <= @time_filter[1]')
+        #xdp_times_df['timestamp'] -= time_filter[0]
 
     for i, row in xdp_times_df.iterrows():
         if time_filter is not None and (row['timestamp'] < time_filter[0] or row['timestamp'] > time_filter[1]):
@@ -280,7 +290,7 @@ def main():
     f = open(args.input, 'r')
     data = json.load(f)
 
-    fig = plt.figure()
+    fig = plt.figure(dpi=125)
     plots = {}
     used_plots = []
     used_cpus = []
@@ -290,11 +300,11 @@ def main():
         cpuids = dict.fromkeys(time_df["cpuid"])
 
         if time_filter is not None:
-            time_df = time_df.query(f'start_time >= {time_filter[0]} and start_time <= {time_filter[1]}')
-            time_df.loc[:, 'start_time'] -= time_filter[0]
-            time_df.loc[:, 'end_time'] -= time_filter[0]
+            time_df = time_df.query('start_time >= @time_filter[0] and start_time <= @time_filter[1]')
+            #time_df['start_time'] = time_df['start_time'] - time_filter[0]
+            #time_df['end_time'] = time_df['end_time'] - time_filter[0]
 
-        time_df['depth'] = time_df['depth'].apply(lambda x: x/10)
+        time_df['depth'] = time_df['depth'] / 10
         time_df['inner_duration_perc'] = time_df['inner_duration'] * 100 / time_df['duration']
 
         if args.stack_merged:
@@ -324,25 +334,32 @@ def main():
 
     for name, ax in plots.items():
         if name.startswith('stack_merged'):
-            plot_stack_merged(time_df, ax, time_filter)
+            plot_stack_merged(time_df, ax, time_filter, args.no_stack_labels, int(args.vertical_label))
         elif name.startswith('stack_per_cpu'):
             ax.sharey = first_ax
             cpuid = used_cpus.pop(0)
-            plot_stack_per_cpu(time_df, cpuid, ax, time_filter)
+            plot_stack_per_cpu(time_df, cpuid, ax, time_filter, args.no_stack_labels, int(args.vertical_label))
         elif name.startswith('memory'):
             plot_memory(data, ax, time_filter)
         elif name.startswith('throughput'):
             plot_throughput(data, ax, time_filter)
 
-        if args.xdp and name.startswith('stack_merged') or name.startswith('stack_per_cpu'):
+        if args.xdp and (name.startswith('stack_merged') or name.startswith('stack_per_cpu')):
             plot_xdp(data, ax, time_filter, args.xdp_labels)
 
-    first_ax.callbacks.connect('xlim_changed', lambda event_ax: update_text_visibility(event_ax, fig, first_ax))
-    update_text_visibility(first_ax, fig, first_ax)
+    first_ax.callbacks.connect('xlim_changed', lambda event_ax: update_text_visibility(event_ax, fig, first_ax, args.visible_threshold))
+    update_text_visibility(first_ax, fig, first_ax, args.visible_threshold)
     last_ax.set_xlabel("Time (ns)")
 
+    if len(used_plots) == 2:
+        height = 4
+    elif len(used_plots) == 3:
+        height = 5
+    else:
+        height = 8
+    fig.set_size_inches(8, height)
     plt.tight_layout()
-    plt.subplots_adjust(top=0.945, bottom=0.095, left=0.06, right=0.92, hspace=0.8)
+    plt.subplots_adjust(top=0.965, bottom=0.06, left=0.05, right=0.94, hspace=0.45, wspace=1.0)
     plt.show()
 
 if __name__ == '__main__':
@@ -359,6 +376,9 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--filter', default=None)
     parser.add_argument('--ignored-cpus', nargs='+', default=[])
     parser.add_argument('--xdp-labels', action='store_true', default=False)
+    parser.add_argument('--no-stack-labels', action='store_true', default=False)
+    parser.add_argument('--vertical-label', default=10000)
+    parser.add_argument('--visible-threshold', default=0.05)
 
     args = parser.parse_args()
 
@@ -367,8 +387,7 @@ if __name__ == '__main__':
     if args.filter is not None:
         time_filter = args.filter
         time_filter = time_filter.split('-')
-        time_filter[0] = int(time_filter[0])
-        time_filter[1] = int(time_filter[1])
+        time_filter = [int(time_filter[0]), int(time_filter[1])]
 
         if time_filter[1] < time_filter[0]:
             print("Invalid time window")

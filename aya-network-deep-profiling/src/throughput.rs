@@ -27,9 +27,9 @@ pub fn process_throughput(throughput_stats: Vec<ThroughputStat>, interfaces: Vec
         .par_iter()
         .map(|throughput_stat| {
             let interface_name = interfaces
-                .iter()
+                .par_iter()
                 .filter(|i| i.index.is_some())
-                .find(|i| i.index.unwrap() == throughput_stat.if_index)
+                .find_first(|i| i.index.unwrap() == throughput_stat.if_index)
                 .map(|interface| interface.name.clone())
                 .unwrap_or_else(|| String::from("Unknown"));
 

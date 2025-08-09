@@ -21,7 +21,7 @@ use aya_ebpf::macros::map;
 use aya_ebpf::maps::{HashMap, PerCpuHashMap, Queue, StackTrace};
 use aya_network_deep_profiling_common::{Alloc, AllocInfo, EthHeader, FunctionCall, KernelFunction, ThroughputStat, UserFunction};
 
-const MAX_ENTRIES: u32 = 500_000;
+const MAX_ENTRIES: u32 = 1_000_000;
 
 // Functions
 

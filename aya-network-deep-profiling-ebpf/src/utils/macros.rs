@@ -114,7 +114,7 @@ macro_rules! alloc {
                     crate::[<$alloc_type:upper _ALLOCATIONS>].push(&alloc_info, 0).map_err(|_| 0u32)?;
                     crate::[<TEMP_ $alloc_type:upper _ALLOCATIONS>].insert(&ptr, &alloc_info, 0).map_err(|_| 0u32)?;
 
-                    aya_log_ebpf::trace!(&fctx.ctx, "ALLOC {} at {:X}", size, ptr);
+                    //aya_log_ebpf::trace!(&fctx.ctx, "ALLOC {} at {:X}", size, ptr);
 
                     Ok(0)
                 }
@@ -152,9 +152,7 @@ macro_rules! free {
                     let ptr: u64 = unsafe { aya_ebpf::helpers::bpf_probe_read_kernel(ptr_ptr).map_err(|_| 0u32)? };
                     let alloc_info = unsafe { *crate::[<TEMP_ $alloc_type:upper _ALLOCATIONS>].get(&ptr).ok_or(0u32)? };
                     let time = unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() };
-
-                    let size = &alloc_info.size;
-
+                    
                     let alloc_info = aya_network_deep_profiling_common::AllocInfo {
                         alloc_type: aya_network_deep_profiling_common::AllocType::$alloc_type,
                         alloc_direction: aya_network_deep_profiling_common::AllocDirection::Free,
@@ -167,7 +165,7 @@ macro_rules! free {
                     crate::[<$alloc_type:upper _ALLOCATIONS>].push(&alloc_info, 0).map_err(|_| 0u32)?;
                     crate::[<TEMP_ $alloc_type:upper _ALLOCATIONS>].remove(&ptr).map_err(|_| 0u32)?;
 
-                    aya_log_ebpf::trace!(&fctx.ctx, "FREED {} at {:X}", *size, ptr);
+                    //aya_log_ebpf::trace!(&fctx.ctx, "FREED {} at {:X}", *size, ptr);
 
                     Ok(0)
                 }

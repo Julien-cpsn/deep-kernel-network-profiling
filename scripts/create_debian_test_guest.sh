@@ -1,0 +1,14 @@
+virt-builder debian-12 \
+  --output images/debian_test.qcow2 \
+  --format qcow2 \
+  --size 6G \
+  --hostname debian \
+  --root-password password:debian \
+  --color \
+  --append-line "/etc/apt/sources.list:deb https://cloudfront.debian.net/debian sid main" \
+  --install "netperf,bpfcc-tools,libbpfcc,libbpfcc-dev,libbpf-dev,clang,linux-libc-dev,linux-headers-generic,linux-source,linux-perf,build-essential,git,pkg-config" \
+  --upload "scripts/guest/mount_shared_folder.sh:/root/mount_shared_folder.sh" \
+  --upload "scripts/guest/ip_config.sh:/root/ip_config.sh" \
+  --upload "scripts/guest/find_ebpf_function.sh:/root/find_ebpf_function.sh" \
+  --upload "scripts/guest/find_lib_function.sh:/root/find_lib_function.sh" \
+  --firstboot-command "/root/mount_shared_folder.sh"

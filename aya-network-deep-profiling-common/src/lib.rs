@@ -247,50 +247,12 @@ enum_display! {
 enum_display! {
     #[allow(non_camel_case_types)]
     #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-    #[cfg_attr(any(feature = "dpdk", feature = "vpp"), repr(u16))]
+    #[cfg_attr(any(feature = "user-space-program"), repr(u16))]
     pub enum UserFunction {
-        /* ===== DPDK ===== */
-        /// Receives a burst of packets from a specified RX queue into an array of mbufs.
-        #[cfg(feature = "dpdk")]
-        rte_eth_rx_burst_mode_get => "/usr/lib/x86_64-linux-gnu/librte_ethdev.so",
-        #[cfg(feature = "dpdk")]
-        rte_malloc => "/usr/lib/x86_64-linux-gnu/librte_eal.so",
-
-        /* ===== VPP ===== */
-
-        #[cfg(feature = "vpp")]
-        dpdk_input_node_fn_hsw => "/usr/lib/x86_64-linux-gnu/vpp_plugins/dpdk_plugin.so",
-        #[cfg(feature = "vpp")]
-        dpdk_input_node_fn_icl => "/usr/lib/x86_64-linux-gnu/vpp_plugins/dpdk_plugin.so",
-        #[cfg(feature = "vpp")]
-        dpdk_input_node_fn_skx => "/usr/lib/x86_64-linux-gnu/vpp_plugins/dpdk_plugin.so",
-
-        #[cfg(feature = "vpp")]
-        crypto_dispatch_node_fn => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
-        #[cfg(feature = "vpp")]
-        crypto_dispatch_node_fn_hsw => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
-        #[cfg(feature = "vpp")]
-        crypto_dispatch_node_fn_icl => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
-        #[cfg(feature = "vpp")]
-        crypto_dispatch_node_fn_skx => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
-
-        #[cfg(feature = "vpp")]
-        bier_disp_dispatch_node_fn => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
-        #[cfg(feature = "vpp")]
-        bier_disp_dispatch_node_fn_hsw => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
-        #[cfg(feature = "vpp")]
-        bier_disp_dispatch_node_fn_icl => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
-        #[cfg(feature = "vpp")]
-        bier_disp_dispatch_node_fn_skx => "/usr/lib/x86_64-linux-gnu/libvnet.so.25.06",
-
-        #[cfg(feature = "vpp")]
-        punt_dispatch_node_fn => "/usr/lib/x86_64-linux-gnu/libvlib.so.25.06",
-        #[cfg(feature = "vpp")]
-        punt_dispatch_node_fn_hsw => "/usr/lib/x86_64-linux-gnu/libvlib.so.25.06",
-        #[cfg(feature = "vpp")]
-        punt_dispatch_node_fn_icl => "/usr/lib/x86_64-linux-gnu/libvlib.so.25.06",
-        #[cfg(feature = "vpp")]
-        punt_dispatch_node_fn_skx => "/usr/lib/x86_64-linux-gnu/libvlib.so.25.06",
+        #[cfg(feature = "user-space-program")]
+        launch => "/root/myServer",
+        #[cfg(feature = "user-space-program")]
+        handle_connection => "/root/myServer",
     }
 }
 

@@ -7,8 +7,7 @@ license.workspace = true
 
 [features]
 default = []
-dpdk = ["aya-network-deep-profiling-common/dpdk"]
-vpp = ["aya-network-deep-profiling-common/vpp"]
+user-space-program = ["aya-network-deep-profiling-common/user-space-program"]
 
 [dependencies]
 aya-network-deep-profiling-common = { path = "../aya-network-deep-profiling-common", features = ["user"] }

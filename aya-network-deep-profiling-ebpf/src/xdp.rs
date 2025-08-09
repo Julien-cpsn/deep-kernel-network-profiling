@@ -1,10 +1,9 @@
-use crate::{XDP_TIMES};
+use crate::XDP_TIMES;
 use aya_ebpf::bindings::xdp_action::XDP_PASS;
 use aya_ebpf::helpers::bpf_ktime_get_ns;
 use aya_ebpf::macros::xdp;
 use aya_ebpf::programs::XdpContext;
-use aya_log_ebpf::{debug};
-use aya_network_deep_profiling_common::{EthHeader};
+use aya_network_deep_profiling_common::EthHeader;
 
 #[xdp]
 pub fn xdp_packet_log(ctx: XdpContext) -> u32 {
@@ -35,6 +34,7 @@ fn try_xdp_packet_log(ctx: XdpContext) -> Result<u32, ()> {
     let eth_header: *const EthHeader = unsafe { ptr_at(&ctx, 0)? };
     let time = unsafe { bpf_ktime_get_ns() };
 
+    /*
     unsafe {
         debug!(
             &ctx,
@@ -46,7 +46,7 @@ fn try_xdp_packet_log(ctx: XdpContext) -> Result<u32, ()> {
             (*eth_header).dst_addr[4],
             (*eth_header).dst_addr[5]
         );
-    }
+    }*/
 
     XDP_TIMES.insert(&time, unsafe { &* eth_header }, 0).map_err(|_| ())?;
 

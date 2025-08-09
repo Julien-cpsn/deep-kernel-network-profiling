@@ -4,9 +4,8 @@ version = "0.1.0"
 edition.workspace = true
 
 [features]
-default = []
-dpdk = ["aya-network-deep-profiling-common/dpdk"]
-vpp = ["aya-network-deep-profiling-common/vpp"]
+default = ["user-space-program"]
+user-space-program = ["aya-network-deep-profiling-common/user-space-program"]
 
 [dependencies]
 aya-network-deep-profiling-common = { path = "../aya-network-deep-profiling-common" }

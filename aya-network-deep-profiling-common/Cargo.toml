@@ -9,8 +9,7 @@ license.workspace = true
 default = []
 user = ["aya", "serde", "rayon"]
 
-dpdk = []
-vpp = []
+user-space-program = []
 
 [dependencies]
 paste = { workspace = true }
