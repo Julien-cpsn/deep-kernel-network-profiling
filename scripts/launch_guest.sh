@@ -1,4 +1,4 @@
-sudo qemu-system-x86_64 -M q35 \
+qemu-system-x86_64 -M q35 \
   -cpu qemu64,+ssse3,+sse4.1,+sse4.2 \
   -smp 4 \
   -m 4096M \
